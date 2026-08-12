@@ -256,6 +256,15 @@ namespace esphome
 
                 ESP_LOGD("Automower", "Decoded: addr=0x%04X val=0x%04X", addr, val);
 
+                // Raw address bytes keep the write bit, so an acknowledged
+                // write (812C) is distinguishable from a read reply (012C).
+                if (last_code_received_text_sensor_ != nullptr)
+                {
+                    char code[16];
+                    snprintf(code, sizeof(code), "%02X%02X=%04X", readData[1], readData[2], val);
+                    last_code_received_text_sensor_->publish_state(code);
+                }
+
                 // Cache every register (except the keypad's own chatter) so the
                 // template sensors/numbers/time entities can read the latest
                 // value without polling it themselves.

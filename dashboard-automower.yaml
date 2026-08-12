@@ -10,7 +10,7 @@
 #    Sök på BATT_MAX och sätt värdet till det du ser direkt efter
 #    full laddning. Står på 2200.
 #
-#  KRÄVER FIRMWARE a5b8235 eller senare:
+#  KRÄVER FIRMWARE e40e916 eller senare:
 #    sensor.automower_status, sensor.automower_total_cutting_time,
 #    sensor.automower_battery_charged_capacity, sensor.automower_mower_clock,
 #    switch.automower_timer_active, datetime-entiteterna för timerschemat.
