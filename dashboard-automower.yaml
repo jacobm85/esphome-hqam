@@ -1,0 +1,538 @@
+# =================================================================
+#  Automower 220 AC - kontrollpanelsreplika för Home Assistant
+#  Entiteter från esphome-hqam (jacobm85/esphome-hqam)
+# =================================================================
+#
+#  KRÄVER (HACS > Frontend):
+#    button-card, stack-in-card, card-mod
+#
+#  KALIBRERING:
+#    Sök på BATT_MAX och sätt värdet till det du ser direkt efter
+#    full laddning. Står på 2200.
+#
+#  KRÄVER FIRMWARE a5b8235 eller senare:
+#    sensor.automower_status, sensor.automower_total_cutting_time,
+#    sensor.automower_battery_charged_capacity, sensor.automower_mower_clock,
+#    switch.automower_timer_active, datetime-entiteterna för timerschemat.
+#
+#  Klistras in via Dashboard > Redigera > Raw configuration editor.
+#  Ersätt allt befintligt innehåll.
+# =================================================================
+
+button_card_templates:
+
+  key:
+    show_icon: false
+    show_state: false
+    styles:
+      card:
+        - height: 46px
+        - background: linear-gradient(180deg, #4A4F54 0%, #3A3E42 100%)
+        - border: 1px solid #1D1F21
+        - border-radius: 7px
+        - box-shadow: >
+            inset 0 1px 0 rgba(255,255,255,.14),
+            inset 0 -2px 4px rgba(0,0,0,.35),
+            0 2px 3px rgba(0,0,0,.5)
+        - transition: all .06s ease-in
+      name:
+        - color: '#DFE3E5'
+        - font-size: 15px
+        - font-weight: 600
+        - letter-spacing: 0.04em
+    extra_styles: |
+      ha-card:active {
+        transform: translateY(1px);
+        box-shadow: inset 0 2px 6px rgba(0,0,0,.55) !important;
+      }
+
+  key_accent:
+    template: key
+    styles:
+      name:
+        - color: '#FF7A2E'
+        - font-size: 12px
+        - font-weight: 700
+        - letter-spacing: 0.08em
+
+  key_small:
+    template: key
+    styles:
+      name:
+        - font-size: 11px
+        - font-weight: 700
+        - letter-spacing: 0.06em
+
+  key_dead:
+    template: key
+    tap_action:
+      action: none
+
+views:
+  - title: Automower
+    path: automower
+    type: sections
+    max_columns: 2
+    sections:
+
+      # =============================================================
+      #  Kontrollpanelen
+      # =============================================================
+      - type: grid
+        cards:
+          - type: custom:stack-in-card
+            mode: vertical
+            keep:
+              background: true
+              box_shadow: true
+              margin: true
+            card_mod:
+              style: |
+                ha-card {
+                  background: linear-gradient(180deg, #35393C 0%, #242729 100%) !important;
+                  border: 1px solid #16181A;
+                  border-radius: 22px;
+                  padding: 18px 16px 20px 16px;
+                  box-shadow: 0 10px 28px rgba(0,0,0,.5);
+                }
+            cards:
+
+              # ---- Märkning ----
+              - type: custom:button-card
+                show_icon: false
+                show_name: false
+                show_state: false
+                tap_action:
+                  action: none
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: none !important;
+                      border: none !important;
+                      box-shadow: none !important;
+                    }
+                custom_fields:
+                  brand: HUSQVARNA
+                  model: AUTOMOWER 220 AC
+                styles:
+                  card:
+                    - padding: 0 4px 14px 4px
+                  grid:
+                    - grid-template-areas: '"brand model"'
+                    - grid-template-columns: auto auto
+                    - justify-content: space-between
+                    - align-items: center
+                  custom_fields:
+                    brand:
+                      - color: '#FF5800'
+                      - font-size: 11px
+                      - font-weight: 700
+                      - letter-spacing: 0.34em
+                    model:
+                      - color: '#787E82'
+                      - font-size: 11px
+                      - letter-spacing: 0.16em
+
+              # ---- LCD ----
+              - type: custom:button-card
+                show_icon: false
+                show_name: false
+                show_state: false
+                tap_action:
+                  action: none
+                card_mod:
+                  style: |
+                    ha-card {
+                      background:
+                        repeating-linear-gradient(0deg, rgba(0,0,0,.055) 0 1px,
+                          transparent 1px 3px),
+                        radial-gradient(130% 150% at 50% 0%,
+                          #B7C65A 0%, #9FAF48 58%, #8A9A3C 100%) !important;
+                      border: 6px solid #14161A !important;
+                      border-radius: 5px !important;
+                      box-shadow: inset 0 3px 12px rgba(0,0,0,.4) !important;
+                    }
+                custom_fields:
+
+                  # Rad 1: läget, stort
+                  mode: >
+                    [[[
+                      var m = states['sensor.automower_current_mode'];
+                      return (m && m.state && m.state !== 'unknown' && m.state.trim() !== '')
+                        ? m.state.toUpperCase() : '- - - -';
+                    ]]]
+
+                  # Rad 1 höger: ladd- eller klipptid
+                  timer: >
+                    [[[
+                      var st = states['sensor.automower_status'];
+                      var md = states['sensor.automower_current_mode'];
+                      var ch = states['sensor.automower_charging_time'];
+                      var mw = states['sensor.automower_mowing_time'];
+                      var bl = states['sensor.automower_blade_motor_speed'];
+
+                      var s = (st && st.state ? st.state : '').toLowerCase();
+                      var m = (md && md.state ? md.state : '').toLowerCase();
+                      var blade = (bl && !isNaN(bl.state)) ? Number(bl.state) : 0;
+
+                      var charging = /charg|ladd/.test(s) || /charg|ladd/.test(m);
+                      var mowing = blade > 0 || /mow|cut|klipp/.test(s);
+
+                      var pick = charging ? ch : (mowing ? mw : null);
+                      var label = charging ? 'LADDAR' : (mowing ? 'KLIPPER' : '');
+
+                      if (!pick) {
+                        if (ch && !isNaN(ch.state) && Number(ch.state) > 0) {
+                          pick = ch; label = 'LADDTID';
+                        } else if (mw && !isNaN(mw.state) && Number(mw.state) > 0) {
+                          pick = mw; label = 'KLIPPTID';
+                        }
+                      }
+                      if (!pick || isNaN(pick.state)) return '';
+
+                      var tot = Math.max(0, Math.round(Number(pick.state)));
+                      var h = Math.floor(tot / 60);
+                      var mi = tot % 60;
+                      var txt = h > 0 ? h + 'h ' + (mi < 10 ? '0' : '') + mi + 'm' : mi + ' min';
+
+                      return '<div style="text-align:right;line-height:1.25;">'
+                        + '<div style="font-size:10px;letter-spacing:.18em;opacity:.75;">'
+                        + label + '</div>'
+                        + '<div style="font-size:17px;font-weight:700;">' + txt + '</div></div>';
+                    ]]]
+
+                  # Rad 2: statustexten (fylls nu direkt från firmware)
+                  status: >
+                    [[[
+                      var s = states['sensor.automower_status'];
+                      return (s && s.state && s.state !== 'unknown' && s.state.trim() !== '')
+                        ? s.state : '- - - -';
+                    ]]]
+
+                  # Rad 3: stapeln
+                  bar: >
+                    [[[
+                      var BATT_MAX = 2200;
+                      var cand = ['sensor.automower_kapacitet',
+                                  'sensor.automower_battery_used'];
+                      var val = NaN;
+                      for (var i = 0; i < cand.length; i++) {
+                        var e = states[cand[i]];
+                        if (e && e.state !== undefined && e.state !== '' && !isNaN(e.state)) {
+                          val = Number(e.state); break;
+                        }
+                      }
+                      var pct = !isNaN(val)
+                        ? Math.min(100, Math.max(0, val / BATT_MAX * 100)) : 0;
+                      return '<div style="height:9px;border:1px solid #16200C;'
+                        + 'background:rgba(0,0,0,.08);display:flex;">'
+                        + '<div style="height:100%;width:' + pct.toFixed(0)
+                        + '%;background:#16200C;"></div></div>';
+                    ]]]
+
+                  # Rad 4: siffrorna
+                  batt: >
+                    [[[
+                      var BATT_MAX = 2200;
+                      var cand = ['sensor.automower_kapacitet',
+                                  'sensor.automower_battery_used'];
+                      var val = NaN;
+                      for (var i = 0; i < cand.length; i++) {
+                        var e = states[cand[i]];
+                        if (e && e.state !== undefined && e.state !== '' && !isNaN(e.state)) {
+                          val = Number(e.state); break;
+                        }
+                      }
+                      var v = states['sensor.automower_battery_voltage'];
+                      var pct = !isNaN(val)
+                        ? Math.min(100, Math.max(0, val / BATT_MAX * 100)).toFixed(0) + '%'
+                        : '--%';
+                      var mah = !isNaN(val) ? Math.round(val) + ' mAh' : '---- mAh';
+                      var volt = (v && !isNaN(v.state)) ? Number(v.state).toFixed(1) + ' V' : '--.- V';
+                      return '<div style="display:flex;justify-content:space-between;">'
+                        + '<span>' + pct + '</span><span>' + mah + '</span>'
+                        + '<span>' + volt + '</span></div>';
+                    ]]]
+
+                  # Rad 5: total klipptid (som på originalet)
+                  total: >
+                    [[[
+                      var t = states['sensor.automower_total_cutting_time'];
+                      if (!t || t.state === undefined || t.state === '' || isNaN(t.state)) return '';
+                      var h = Math.round(Number(t.state));
+                      return '<div style="display:flex;justify-content:space-between;'
+                        + 'border-top:1px solid rgba(0,0,0,.18);padding-top:5px;">'
+                        + '<span>TOTAL KLIPPTID</span><span>' + h + ' h</span></div>';
+                    ]]]
+
+                styles:
+                  card:
+                    - padding: 15px 16px 16px 16px
+                  grid:
+                    - grid-template-areas: '"mode timer" "status status" "bar bar" "batt batt" "total total"'
+                    - grid-template-columns: 1fr auto
+                    - align-items: end
+                    - gap: 7px 10px
+                  custom_fields:
+                    mode:
+                      - font-family: '"Roboto Mono", "SF Mono", Consolas, monospace'
+                      - font-size: 30px
+                      - font-weight: 700
+                      - letter-spacing: 0.1em
+                      - line-height: 1.05
+                      - color: '#151F0B'
+                      - text-align: left
+                    timer:
+                      - font-family: '"Roboto Mono", "SF Mono", Consolas, monospace'
+                      - color: '#1D2A0E'
+                      - text-align: right
+                      - padding: 0 0 2px 0
+                    status:
+                      - font-family: '"Roboto Mono", "SF Mono", Consolas, monospace'
+                      - font-size: 14px
+                      - letter-spacing: 0.1em
+                      - color: '#2C3A16'
+                      - text-align: left
+                      - line-height: 1.2
+                    bar:
+                      - padding: 4px 0 1px 0
+                    batt:
+                      - font-family: '"Roboto Mono", "SF Mono", Consolas, monospace'
+                      - font-size: 12px
+                      - letter-spacing: 0.06em
+                      - color: '#2B3915'
+                    total:
+                      - font-family: '"Roboto Mono", "SF Mono", Consolas, monospace'
+                      - font-size: 11px
+                      - letter-spacing: 0.08em
+                      - color: '#2B3915'
+
+              # ---- Knappsats ----
+              - type: grid
+                columns: 4
+                square: false
+                cards:
+
+                  # rad 1
+                  - type: custom:button-card
+                    template: key
+                    name: "1"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_1 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "2"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_2 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "3"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_3 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "▲"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_up } }
+
+                  # rad 2
+                  - type: custom:button-card
+                    template: key
+                    name: "4"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_4 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "5"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_5 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "6"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_6 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "▼"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_down } }
+
+                  # rad 3
+                  - type: custom:button-card
+                    template: key
+                    name: "7"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_7 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "8"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_8 } }
+                  - type: custom:button-card
+                    template: key
+                    name: "9"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_9 } }
+                  - type: custom:button-card
+                    template: key_small
+                    name: "MAN/AUTO"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_man_auto } }
+
+                  # rad 4
+                  - type: custom:button-card
+                    template: key_small
+                    name: "C"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_c } }
+                  - type: custom:button-card
+                    template: key
+                    name: "0"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_0 } }
+                  - type: custom:button-card
+                    template: key_accent
+                    name: "YES"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_yes } }
+                  - type: custom:button-card
+                    template: key_small
+                    name: "HOME"
+                    tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_home } }
+
+          # ---- Lägesväljare under panelen ----
+          - type: tile
+            entity: select.automower_mode_select
+            name: Läge
+            icon: mdi:robot-mower
+            features:
+              - type: select-options
+
+      # =============================================================
+      #  Timerschema
+      # =============================================================
+      - type: grid
+        cards:
+          - type: heading
+            heading: Timerschema
+            heading_style: title
+
+          - type: tile
+            entity: switch.automower_timer_active
+            name: Timer aktiv
+            icon: mdi:timer-cog
+            features:
+              - type: toggle
+
+          - type: heading
+            heading: Timer 1
+            heading_style: subtitle
+
+          - type: tile
+            entity: time.automower_timer_1_weekday_start
+            name: Vardag start
+            icon: mdi:clock-start
+          - type: tile
+            entity: time.automower_timer_1_weekday_stop
+            name: Vardag stopp
+            icon: mdi:clock-end
+          - type: tile
+            entity: time.automower_timer_1_weekend_start
+            name: Helg start
+            icon: mdi:clock-start
+          - type: tile
+            entity: time.automower_timer_1_weekend_stop
+            name: Helg stopp
+            icon: mdi:clock-end
+
+          - type: heading
+            heading: Timer 2
+            heading_style: subtitle
+
+          - type: tile
+            entity: time.automower_timer_2_weekday_start
+            name: Vardag start
+            icon: mdi:clock-start
+          - type: tile
+            entity: time.automower_timer_2_weekday_stop
+            name: Vardag stopp
+            icon: mdi:clock-end
+          - type: tile
+            entity: time.automower_timer_2_weekend_start
+            name: Helg start
+            icon: mdi:clock-start
+          - type: tile
+            entity: time.automower_timer_2_weekend_stop
+            name: Helg stopp
+            icon: mdi:clock-end
+
+      # =============================================================
+      #  Mätvärden
+      # =============================================================
+      - type: grid
+        cards:
+          - type: heading
+            heading: Drift
+          - type: tile
+            entity: sensor.automower_blade_motor_speed
+            name: Knivmotor
+            icon: mdi:fan
+          - type: tile
+            entity: sensor.automower_mowing_time
+            name: Klipptid (pass)
+            icon: mdi:timer-outline
+          - type: tile
+            entity: sensor.automower_total_cutting_time
+            name: Total klipptid
+            icon: mdi:timer-sand
+          - type: tile
+            entity: sensor.automower_charging_time
+            name: Laddtid
+            icon: mdi:battery-charging
+          - type: tile
+            entity: sensor.automower_loop_signal_quality
+            name: Loop-signal
+            icon: mdi:signal-variant
+
+          - type: heading
+            heading: Batteri
+          - type: tile
+            entity: sensor.automower_battery_used
+            name: Kapacitet
+            icon: mdi:battery
+            features:
+              - type: history-chart
+                hours_to_show: 48
+          - type: tile
+            entity: sensor.automower_battery_capacity
+            name: Total kapacitet
+            icon: mdi:battery-high
+          - type: tile
+            entity: sensor.automower_battery_charged_capacity
+            name: Laddad kapacitet
+            icon: mdi:battery-charging-100
+          - type: tile
+            entity: sensor.automower_battery_current
+            name: Ström
+            icon: mdi:current-dc
+          - type: tile
+            entity: sensor.automower_battery_voltage
+            name: Spänning
+            icon: mdi:flash
+          - type: tile
+            entity: sensor.automower_battery_temperature
+            name: Temperatur
+            icon: mdi:thermometer
+
+          - type: heading
+            heading: Diagnostik
+          - type: tile
+            entity: sensor.automower_status
+            name: Status
+            icon: mdi:text-short
+          - type: tile
+            entity: sensor.automower_mower_clock
+            name: Klocka
+            icon: mdi:clock-outline
+          - type: tile
+            entity: sensor.automower_firmware_version
+            name: Firmware
+            icon: mdi:chip
+          - type: tile
+            entity: sensor.automower_last_received_code
+            name: Senaste kod
+            icon: mdi:code-braces
+          - type: tile
+            entity: button.automower_restart
+            name: Starta om ESP
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.automower_restart

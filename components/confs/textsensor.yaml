@@ -4,18 +4,45 @@ text_sensor:
     name: "Last received code"
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_last_code_received_text_sensor()->state};
+      std::string s = mower->get_last_code_received_text_sensor()->state;
+      if (s.empty()) return {};
+      return {s};
 
   - platform: template
     id: "current_mode"
     name: "Current Mode"
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_mode_text_sensor()->state};
+      std::string s = mower->get_mode_text_sensor()->state;
+      if (s.empty()) return {};
+      return {s};
 
   - platform: template
     id: "status_sensor"
     name: "Status"
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_status_text_sensor()->state};
+      std::string s = mower->get_status_text_sensor()->state;
+      if (s.empty()) return {};
+      return {s};
+
+  # Combined mower clock from registers 0x36B1..0x36BD.
+  - platform: template
+    id: "mower_clock"
+    name: "Mower clock"
+    icon: mdi:clock-outline
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float s  = mower->get_register(0x36B1);
+      float mi = mower->get_register(0x36B3);
+      float h  = mower->get_register(0x36B5);
+      float d  = mower->get_register(0x36B7);
+      float mo = mower->get_register(0x36B9);
+      float y  = mower->get_register(0x36BD);
+      if (std::isnan(s) || std::isnan(mi) || std::isnan(h) ||
+          std::isnan(d) || std::isnan(mo) || std::isnan(y)) return {};
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
+               (int) y, (int) mo, (int) d, (int) h, (int) mi, (int) s);
+      return {std::string(buf)};

@@ -34,13 +34,16 @@ wifi:
 
 captive_portal:
 
+# Required: components/confs/button.yaml uses logger.log actions.
+logger:
+
 external_components:
-  - source: github://orrpan/esphome-hqam@main
+  - source: github://jacobm85/esphome-hqam@main
     refresh: always
 
 packages:
   remote_package:
-    url: https://github.com/orrpan/esphome-hqam
+    url: https://github.com/jacobm85/esphome-hqam
     ref: main
     refresh: always
     files:
@@ -52,4 +55,5 @@ packages:
         components/confs/sensor.yaml,
         components/confs/textsensor.yaml,
         components/confs/switch.yaml,
+        components/confs/datetime.yaml,
       ]

@@ -1,11 +1,14 @@
 sensor:
+  # Register 0x01EF: charged capacity, not battery level. Unverified.
   - platform: template
-    id: batteryLevelSensor
-    name: "Battery level"
+    id: batteryChargedSensor
+    name: "Battery charged capacity"
     unit_of_measurement: mAh
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_battery_level_sensor()->state};
+      float v = mower->get_battery_level_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: chargingTimeSensor
@@ -13,7 +16,9 @@ sensor:
     unit_of_measurement: min
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_charging_time_sensor()->state};
+      float v = mower->get_charging_time_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: mowingTimeSensor
@@ -21,7 +26,9 @@ sensor:
     unit_of_measurement: min
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_mowing_time_sensor()->state};
+      float v = mower->get_mowing_time_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: batteryUsedSensor
@@ -29,7 +36,9 @@ sensor:
     unit_of_measurement: mAh
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_battery_used_sensor()->state};
+      float v = mower->get_battery_used_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: batteryVoltageSensor
@@ -37,7 +46,9 @@ sensor:
     unit_of_measurement: V
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_battery_voltage_sensor()->state};
+      float v = mower->get_battery_voltage_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: batteryTemperatureSensor
@@ -45,7 +56,9 @@ sensor:
     unit_of_measurement: "°C"
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_battery_temperature_sensor()->state};
+      float v = mower->get_battery_temperature_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: bladeMotorSpeedSensor
@@ -53,11 +66,132 @@ sensor:
     unit_of_measurement: RPM
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_blade_motor_speed_sensor()->state};
+      float v = mower->get_blade_motor_speed_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
 
   - platform: template
     id: firmwareVersionSensor
     name: "Firmware version"
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return {mower->get_firmware_version_sensor()->state};
+      float v = mower->get_firmware_version_sensor()->state;
+      if (std::isnan(v)) return {};
+      return {v};
+
+  # Extra registers from the register cache. Several are unverified,
+  # marked diagnostic, and may need calibration.
+
+  - platform: template
+    id: batteryCurrentSensor
+    name: "Battery current"
+    unit_of_measurement: mA
+    device_class: current
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x01EB, true);  // signed
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: batteryCapacitySensor
+    name: "Battery capacity"
+    unit_of_measurement: mAh
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x00B1);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: batteryReturnSensor
+    name: "Battery capacity before return"
+    unit_of_measurement: mAh
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x01F0);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: chargeCycleTimeSensor
+    name: "Time since last charge"
+    unit_of_measurement: min
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x0234);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: totalCuttingTimeSensor
+    name: "Total cutting time"
+    icon: mdi:timer-outline
+    unit_of_measurement: h
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x0038);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: loopQualitySensor
+    name: "Loop signal quality"
+    icon: mdi:signal-variant
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x01B9);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: wheelSpeedRightSensor
+    name: "Wheel speed right"
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x24BF, true);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: wheelSpeedLeftSensor
+    name: "Wheel speed left"
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x24C0, true);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: batteryTempChargingSensor
+    name: "Battery temperature (charging)"
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x0235);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: squareModePercentSensor
+    name: "Square mode percent"
+    unit_of_measurement: "%"
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x0134);
+      if (std::isnan(v)) return {};
+      return {v};
+
+  - platform: template
+    id: timerDaysSensor
+    name: "Timer active days (raw)"
+    icon: mdi:calendar-week
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x4A50);
+      if (std::isnan(v)) return {};
+      return {v};

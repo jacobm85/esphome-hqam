@@ -1,3 +1,21 @@
+switch:
+  - platform: template
+    name: "Timer active"
+    id: timer_active
+    icon: mdi:timer-cog
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      return mower->get_timer_active();
+    turn_on_action:
+      - lambda: |-
+          esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+          mower->set_timer_active(true);
+    turn_off_action:
+      - lambda: |-
+          esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+          mower->set_timer_active(false);
+
+# ---- Reference: raw UART frames from the original reverse-engineering ----
 # switch:
 #   - platform: uart
 #     name: "W go home key"
