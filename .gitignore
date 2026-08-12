@@ -2,6 +2,17 @@
 .esphome
 __pycache__
 
+# ESPHome credentials
+secrets.yaml
+
+# Editor / local tool settings
+.idea/
+.claude/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
 # Prerequisites
 *.d
 
