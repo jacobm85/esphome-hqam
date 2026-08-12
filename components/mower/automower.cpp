@@ -1,7 +1,9 @@
 #include "automower.h"
 #include "esphome/core/log.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace esphome
 {
@@ -96,10 +98,23 @@ namespace esphome
         template_::TemplateTextSensor *Automower::get_mode_text_sensor() const { return mode_text_sensor_; }
         template_::TemplateTextSensor *Automower::get_status_text_sensor() const { return status_text_sensor_; }
 
+        void Automower::store_register(uint16_t addr, uint16_t val)
+        {
+            auto it = std::lower_bound(register_values_.begin(), register_values_.end(), addr,
+                                       [](const std::pair<uint16_t, uint16_t> &e, uint16_t a)
+                                       { return e.first < a; });
+            if (it != register_values_.end() && it->first == addr)
+                it->second = val;
+            else
+                register_values_.insert(it, std::make_pair(addr, val));
+        }
+
         float Automower::get_register(uint16_t addr, bool is_signed)
         {
-            auto it = register_values_.find(addr);
-            if (it == register_values_.end())
+            auto it = std::lower_bound(register_values_.begin(), register_values_.end(), addr,
+                                       [](const std::pair<uint16_t, uint16_t> &e, uint16_t a)
+                                       { return e.first < a; });
+            if (it == register_values_.end() || it->first != addr)
                 return NAN;
             uint16_t raw = it->second;
             if (is_signed)
@@ -112,6 +127,10 @@ namespace esphome
             float h = get_register(0x4A00 | hour_reg);
             float m = get_register(0x4A00 | minute_reg);
             if (std::isnan(h) || std::isnan(m))
+                return {};
+            // A register that has not been written yet, or a garbled reply, can
+            // hold anything. Report unknown rather than a nonsense clock time.
+            if (h < 0.0f || h > 23.0f || m < 0.0f || m > 59.0f)
                 return {};
             esphome::ESPTime t{};
             t.hour = static_cast<uint8_t>(h);
@@ -130,6 +149,15 @@ namespace esphome
         }
 
         void Automower::setup() {}
+
+        void Automower::dump_config()
+        {
+            ESP_LOGCONFIG("Automower", "Automower:");
+            ESP_LOGCONFIG("Automower", "  Update interval: %u ms", (unsigned) this->get_update_interval());
+            ESP_LOGCONFIG("Automower", "  Fast registers: %u", (unsigned) fastCommands.size());
+            ESP_LOGCONFIG("Automower", "  Slow registers: %u", (unsigned) slowCommands.size());
+            ESP_LOGCONFIG("Automower", "  Slow poll every: %u sends", (unsigned) SLOW_POLL_EVERY);
+        }
 
         void Automower::update()
         {
@@ -233,7 +261,7 @@ namespace esphome
             // 60s, while the slow poller only refreshes a timer register every
             // few minutes, so without this a new time reverts on screen until
             // the next read comes round.
-            register_values_[0x4A00 | reg] = value;
+            store_register(0x4A00 | reg, value);
         }
 
         void Automower::set_timer_active(bool active)
@@ -242,7 +270,7 @@ namespace esphome
             uint8_t data[5] = {0x0F, 0xCA, 0x4E, 0x00, static_cast<uint8_t>(active ? 0x00 : 0x01)};
             ESP_LOGD("Automower", "Set timer active = %s", active ? "true" : "false");
             write_array(data, 5);
-            register_values_[0x4A4E] = active ? 0x00 : 0x01;
+            store_register(0x4A4E, active ? 0x00 : 0x01);
         }
 
         void Automower::checkUartRead()
@@ -275,7 +303,7 @@ namespace esphome
                 // template sensors/numbers/time entities can read the latest
                 // value without polling it themselves.
                 if (addr != 0x005F && addr != 0x0F80)
-                    register_values_[addr] = val;
+                    store_register(addr, val);
 
                 switch (addr)
                 {
@@ -494,7 +522,7 @@ namespace esphome
         std::string Automower::formatHex(uint16_t v)
         {
             char s[16];
-            sprintf(s, "%04x", v);
+            snprintf(s, sizeof(s), "%04x", v);
             return std::string(s);
         }
 

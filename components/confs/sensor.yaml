@@ -82,6 +82,19 @@ sensor:
   # Extra registers from the register cache. Several are unverified,
   # marked diagnostic, and may need calibration.
 
+  # Register 0x012F, written by the Stop and Reset Stop buttons. 0x0002 is
+  # known to mean stopped; the other values are unmapped, so the raw number
+  # is exposed until we have seen what the machine actually reports.
+  - platform: template
+    id: stopStateSensor
+    name: "Stop state raw"
+    entity_category: diagnostic
+    lambda: |-
+      esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
+      float v = mower->get_register(0x012F);
+      if (std::isnan(v)) return {};
+      return {v};
+
   - platform: template
     id: batteryCurrentSensor
     name: "Battery current"

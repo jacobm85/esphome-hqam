@@ -7,9 +7,9 @@
 #include "esphome/components/template/sensor/template_sensor.h"
 #include "esphome/components/template/text_sensor/template_text_sensor.h"
 
-#include <map>
 #include <vector>
 #include <string>
+#include <utility>
 
 namespace esphome
 {
@@ -58,6 +58,7 @@ namespace esphome
       void setup() override;
       void update() override;
       void loop() override;
+      void dump_config() override;
 
       void set_mode(const std::string &value);
       void set_stop(bool stop);
@@ -90,8 +91,11 @@ namespace esphome
       // the responsive ones (status, voltage, ...).
       static constexpr uint8_t SLOW_POLL_EVERY = 3;
 
-      // Latest raw value per register address, keyed by the decoded address.
-      std::map<uint16_t, uint16_t> register_values_;
+      // Latest raw value per register address, sorted by address. A vector
+      // rather than a map: around 50 entries, where a node allocation each
+      // costs more than the linear insert saves.
+      std::vector<std::pair<uint16_t, uint16_t>> register_values_;
+      void store_register(uint16_t addr, uint16_t val);
 
       template_::TemplateSensor *battery_level_sensor_ = nullptr;
       template_::TemplateSensor *battery_temperature_sensor_ = nullptr;
