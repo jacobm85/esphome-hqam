@@ -1,7 +1,11 @@
 mower:
   id: mower_id
   uart_id: uart_mower
-  update_interval: 5s
+  # Minimum gap between two frames on the bus, not a fixed schedule: the
+  # component sends the next one as soon as the previous is answered and this
+  # much time has passed. The machine drops frames if polled much faster than
+  # about a second, so treat 1s as the floor.
+  update_interval: 1s
   # battery_level: battery_level
   # battery_used: battery_used
   # charging_time: charging_time

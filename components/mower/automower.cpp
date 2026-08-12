@@ -159,24 +159,45 @@ namespace esphome
             ESP_LOGCONFIG("Automower", "  Slow poll every: %u sends", (unsigned) SLOW_POLL_EVERY);
         }
 
-        void Automower::update()
+        // Sending is driven from loop(), not from this tick. update_interval is
+        // the minimum gap between two frames rather than a fixed schedule, so
+        // the pace follows how fast the machine actually answers while still
+        // never exceeding a rate it can keep up with.
+        void Automower::update() {}
+
+        void Automower::serviceBus()
         {
-            // The service port is a shared half-duplex bus (the robot's own
-            // keypad talks on it too), so we send one command per tick and wait
-            // for its reply before advancing to the next, to avoid interleaving
-            // TX/RX frames. Crucially we never *drop* a slot: we only advance
-            // once the previous command was answered (_writable) or its reply
-            // timed out. The old code dropped the send but advanced anyway, so a
-            // slot that landed on a busy tick — e.g. the status poll — was
-            // skipped for the whole cycle and its sensor stayed empty.
-            if (!_writable && (millis() - last_send_time_) < UART_REPLY_TIMEOUT_MS)
+            const uint32_t now = millis();
+
+            // The service port is half duplex and the robot's own keypad talks
+            // on it too, so only one frame may be in flight. Wait for the answer
+            // before sending anything else, and give up after the timeout so a
+            // register the robot never answers cannot stall the cycle.
+            if (awaiting_reply_)
+            {
+                if ((now - last_send_time_) < UART_REPLY_TIMEOUT_MS)
+                    return;
+                ESP_LOGD("Automower", "No reply for 0x%04X, moving on", expected_addr_);
+                awaiting_reply_ = false;
+            }
+
+            if ((now - last_send_time_) < this->get_update_interval())
                 return;
-            if (!_writable)
-                ESP_LOGD("Automower", "No reply for previous command, moving on");
-            sendNextCommand();
+
+            // User writes go first: a button press should not wait out a full
+            // poll cycle.
+            if (!write_queue_.empty())
+            {
+                Frame f = write_queue_.front();
+                write_queue_.erase(write_queue_.begin());
+                sendFrame(f.b, false);
+                return;
+            }
+
+            sendNextPoll();
         }
 
-        void Automower::sendNextCommand()
+        void Automower::sendNextPoll()
         {
             const uint8_t *cmd;
             // Interleave one slow-tier command every SLOW_POLL_EVERY sends.
@@ -193,31 +214,50 @@ namespace esphome
                 cmd = fastCommands[fast_index_];
                 fast_index_ = (fast_index_ + 1) % fastCommands.size();
             }
-            ESP_LOGD("Automower", "UART TX: %02X %02X %02X %02X %02X", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
-            write_array(cmd, 5);
-            _writable = false;
-            last_send_time_ = millis();
+            sendFrame(cmd, true);
         }
 
-        void Automower::loop() { checkUartRead(); }
+        void Automower::sendFrame(const uint8_t *data, bool expect_reply)
+        {
+            ESP_LOGD("Automower", "UART TX: %02X %02X %02X %02X %02X", data[0], data[1], data[2], data[3], data[4]);
+            write_array(data, 5);
+            last_send_time_ = millis();
+            awaiting_reply_ = expect_reply;
+            if (expect_reply)
+                expected_addr_ = ((data[1] & 0x7F) << 8) | data[2];
+        }
+
+        void Automower::queueFrame(const uint8_t *data)
+        {
+            Frame f{};
+            for (uint8_t i = 0; i < 5; i++)
+                f.b[i] = data[i];
+            write_queue_.push_back(f);
+        }
+
+        void Automower::loop()
+        {
+            checkUartRead();
+            serviceBus();
+        }
 
         void Automower::set_mode(const std::string &value)
         {
             if (value == "MAN")
             {
-                write_array(MAN_DATA, sizeof(MAN_DATA));
+                queueFrame(MAN_DATA);
             }
             else if (value == "AUTO")
             {
-                write_array(AUTO_DATA, sizeof(AUTO_DATA));
+                queueFrame(AUTO_DATA);
             }
             else if (value == "HOME")
             {
-                write_array(HOME_DATA, sizeof(HOME_DATA));
+                queueFrame(HOME_DATA);
             }
             else if (value == "DEMO")
             {
-                write_array(DEMO_DATA, sizeof(DEMO_DATA));
+                queueFrame(DEMO_DATA);
             }
             else
             {
@@ -227,27 +267,27 @@ namespace esphome
 
         void Automower::set_stop(bool stop)
         {
-            write_array(stop ? STOP_ON_DATA : STOP_OFF_DATA, 5);
+            queueFrame(stop ? STOP_ON_DATA : STOP_OFF_DATA);
         }
 
         void Automower::set_left_motor(int value)
         {
             uint8_t data[5] = {0x0F, 0x92, 0x23, static_cast<uint8_t>((value >> 8) & 0xFF), static_cast<uint8_t>(value & 0xFF)};
-            write_array(data, 5);
+            queueFrame(data);
         }
 
         void Automower::set_right_motor(int value)
         {
             uint8_t data[5] = {0x0F, 0x92, 0x03, static_cast<uint8_t>((value >> 8) & 0xFF), static_cast<uint8_t>(value & 0xFF)};
-            write_array(data, 5);
+            queueFrame(data);
         }
 
-        void Automower::key_back() { write_array(KEY_BACK, 5); }
-        void Automower::key_yes() { write_array(KEY_YES, 5); }
+        void Automower::key_back() { queueFrame(KEY_BACK); }
+        void Automower::key_yes() { queueFrame(KEY_YES); }
         void Automower::key_num(uint8_t num)
         {
             uint8_t data[5] = {0x0F, 0x80, 0x5F, 0x00, num};
-            write_array(data, 5);
+            queueFrame(data);
         }
 
         void Automower::set_timer_register(uint8_t reg, uint8_t value)
@@ -256,7 +296,7 @@ namespace esphome
             // The value goes in the last byte, matching the mode/stop writes.
             uint8_t data[5] = {0x0F, 0xCA, reg, 0x00, value};
             ESP_LOGD("Automower", "Set timer reg 0x%02X = %u", reg, value);
-            write_array(data, 5);
+            queueFrame(data);
             // Update the cache too. The entities read their value from it every
             // 60s, while the slow poller only refreshes a timer register every
             // few minutes, so without this a new time reverts on screen until
@@ -269,7 +309,7 @@ namespace esphome
             // 0 enables the timer, 1 disables it.
             uint8_t data[5] = {0x0F, 0xCA, 0x4E, 0x00, static_cast<uint8_t>(active ? 0x00 : 0x01)};
             ESP_LOGD("Automower", "Set timer active = %s", active ? "true" : "false");
-            write_array(data, 5);
+            queueFrame(data);
             store_register(0x4A4E, active ? 0x00 : 0x01);
         }
 
@@ -281,7 +321,6 @@ namespace esphome
             {
                 uint8_t readData[5];
                 read_array(readData, 5);
-                _writable = true;
 
                 ESP_LOGD("Automower", "UART RX: %02X %02X %02X %02X %02X", readData[0], readData[1], readData[2], readData[3], readData[4]);
 
@@ -289,6 +328,13 @@ namespace esphome
                 uint16_t val = (readData[4] << 8) | readData[3];
 
                 ESP_LOGD("Automower", "Decoded: addr=0x%04X val=0x%04X", addr, val);
+
+                // Only the answer we asked for releases the bus. The keypad
+                // talks on the same wires, and treating its traffic as our
+                // reply would let us send while the real answer is still in
+                // flight. Anything unmatched falls through to the timeout.
+                if (awaiting_reply_ && addr == expected_addr_)
+                    awaiting_reply_ = false;
 
                 // Raw address bytes keep the write bit, so an acknowledged
                 // write (812C) is distinguishable from a read reply (012C).

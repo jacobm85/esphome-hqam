@@ -75,12 +75,30 @@ namespace esphome
       void set_timer_active(bool active);
 
     protected:
-      bool _writable = true;
       bool stopStatus = false;
       uint32_t last_send_time_ = 0;
+
+      // Set while a poll is waiting for its answer. expected_addr_ holds the
+      // address that answer must carry, so the keypad's own traffic on the
+      // shared bus cannot be mistaken for our reply.
+      bool awaiting_reply_ = false;
+      uint16_t expected_addr_ = 0;
+
       // If a polled command gets no reply within this window we stop waiting and
       // move on, so a register the robot never answers can't stall the cycle.
       static constexpr uint32_t UART_REPLY_TIMEOUT_MS = 2000;
+
+      // Frames queued by buttons, selects and switches. The bus is half duplex
+      // and shared, so user writes are handed to the scheduler instead of being
+      // put on the wire the moment the entity is operated.
+      struct Frame
+      {
+        uint8_t b[5];
+      };
+      std::vector<Frame> write_queue_;
+      void queueFrame(const uint8_t *data);
+      void serviceBus();
+      void sendFrame(const uint8_t *data, bool expect_reply);
 
       // Round-robin cursors for the two poll tiers plus the interleave counter.
       size_t fast_index_ = 0;
@@ -172,7 +190,7 @@ namespace esphome
       std::vector<const uint8_t *> slowCommands;
 
       void buildCommandLists();
-      void sendNextCommand();
+      void sendNextPoll();
       void checkUartRead();
       void setStopStatusFromCode(uint16_t val);
       void publishMode(uint16_t val);
