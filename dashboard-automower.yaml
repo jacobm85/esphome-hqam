@@ -1,22 +1,22 @@
 # =================================================================
-#  Automower 220 AC - kontrollpanelsreplika för Home Assistant
-#  Entiteter från esphome-hqam (jacobm85/esphome-hqam)
+#  Automower 220 AC - control panel replica for Home Assistant
+#  Entities from esphome-hqam (jacobm85/esphome-hqam)
 # =================================================================
 #
-#  KRÄVER (HACS > Frontend):
+#  REQUIRES (HACS > Frontend):
 #    button-card, stack-in-card, card-mod
 #
-#  KALIBRERING:
-#    Sök på BATT_MAX och sätt värdet till det du ser direkt efter
-#    full laddning. Står på 2200.
+#  CALIBRATION:
+#    Search for BATT_MAX and set it to the value seen right after
+#    a full charge. Currently 2200.
 #
-#  KRÄVER FIRMWARE e40e916 eller senare:
+#  REQUIRES FIRMWARE e40e916 OR LATER:
 #    sensor.automower_status, sensor.automower_total_cutting_time,
 #    sensor.automower_battery_charged_capacity, sensor.automower_mower_clock,
-#    switch.automower_timer_active, datetime-entiteterna för timerschemat.
+#    switch.automower_timer_active, the datetime entities for the schedule.
 #
-#  Klistras in via Dashboard > Redigera > Raw configuration editor.
-#  Ersätt allt befintligt innehåll.
+#  Paste via Dashboard > Edit > Raw configuration editor.
+#  Replace all existing content.
 # =================================================================
 
 button_card_templates:
@@ -76,7 +76,7 @@ views:
     sections:
 
       # =============================================================
-      #  Kontrollpanelen
+      #  Control panel
       # =============================================================
       - type: grid
         cards:
@@ -97,7 +97,7 @@ views:
                 }
             cards:
 
-              # ---- Märkning ----
+              # ---- Labelling ----
               - type: custom:button-card
                 show_icon: false
                 show_name: false
@@ -154,7 +154,7 @@ views:
                     }
                 custom_fields:
 
-                  # Rad 1: läget, stort
+                  # Row 1: mode, large
                   mode: >
                     [[[
                       var m = states['sensor.automower_current_mode'];
@@ -162,7 +162,7 @@ views:
                         ? m.state.toUpperCase() : '- - - -';
                     ]]]
 
-                  # Rad 1 höger: ladd- eller klipptid
+                  # Row 1 right: charging or mowing time
                   timer: >
                     [[[
                       var st = states['sensor.automower_status'];
@@ -201,7 +201,7 @@ views:
                         + '<div style="font-size:17px;font-weight:700;">' + txt + '</div></div>';
                     ]]]
 
-                  # Rad 2: statustexten (fylls nu direkt från firmware)
+                  # Row 2: status text
                   status: >
                     [[[
                       var s = states['sensor.automower_status'];
@@ -209,7 +209,7 @@ views:
                         ? s.state : '- - - -';
                     ]]]
 
-                  # Rad 3: stapeln
+                  # Row 3: bar
                   bar: >
                     [[[
                       var BATT_MAX = 2200;
@@ -230,7 +230,7 @@ views:
                         + '%;background:#16200C;"></div></div>';
                     ]]]
 
-                  # Rad 4: siffrorna
+                  # Row 4: numbers
                   batt: >
                     [[[
                       var BATT_MAX = 2200;
@@ -254,7 +254,7 @@ views:
                         + '<span>' + volt + '</span></div>';
                     ]]]
 
-                  # Rad 5: total klipptid (som på originalet)
+                  # Row 5: total cutting time
                   total: >
                     [[[
                       var t = states['sensor.automower_total_cutting_time'];
@@ -307,13 +307,13 @@ views:
                       - letter-spacing: 0.08em
                       - color: '#2B3915'
 
-              # ---- Knappsats ----
+              # ---- Keypad ----
               - type: grid
                 columns: 4
                 square: false
                 cards:
 
-                  # rad 1
+                  # row 1
                   - type: custom:button-card
                     template: key
                     name: "1"
@@ -331,7 +331,7 @@ views:
                     name: "▲"
                     tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_up } }
 
-                  # rad 2
+                  # row 2
                   - type: custom:button-card
                     template: key
                     name: "4"
@@ -349,7 +349,7 @@ views:
                     name: "▼"
                     tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_down } }
 
-                  # rad 3
+                  # row 3
                   - type: custom:button-card
                     template: key
                     name: "7"
@@ -367,7 +367,7 @@ views:
                     name: "MAN/AUTO"
                     tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_man_auto } }
 
-                  # rad 4
+                  # row 4
                   - type: custom:button-card
                     template: key_small
                     name: "C"
@@ -385,7 +385,7 @@ views:
                     name: "HOME"
                     tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_home } }
 
-          # ---- Lägesväljare under panelen ----
+          # ---- Mode selector below the panel ----
           - type: tile
             entity: select.automower_mode_select
             name: Läge
@@ -394,7 +394,7 @@ views:
               - type: select-options
 
       # =============================================================
-      #  Timerschema
+      #  Timer schedule
       # =============================================================
       - type: grid
         cards:
@@ -452,7 +452,7 @@ views:
             icon: mdi:clock-end
 
       # =============================================================
-      #  Mätvärden
+      #  Measurements
       # =============================================================
       - type: grid
         cards:
