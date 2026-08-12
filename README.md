@@ -24,11 +24,11 @@ schedule are exposed to Home Assistant.
 The service port is the white 10-way header on the mainboard, seen from above:
 
 ```
-   ┌────────────────────────────────────────────┐
-   │  ▯   ▯   ▯   ▯   ▯   ▯   ▯   ▯   ▯   ▯     │
-   └──┬───┬───┬───┬───┬───┬───┬───┬───┬───┬─────┘
-      1   2   3   4   5   6   7   8   9   10
-      Rx  Tx  -   -   -   -   GND 5V  3V3 18V
+     1   2   3   4   5   6   7   8   9   10
+   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+   │ ▪ │ ▪ │ ▪ │ ▪ │ ▪ │ ▪ │ ▪ │ ▪ │ ▪ │ ▪ │
+   └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+     Rx  Tx  ·   ·   ·   ·  GND  5V 3V3 18V
 ```
 
 Photo of the connector with the conductors identified:
@@ -63,25 +63,39 @@ values, and Rx/Tx sit near zero at idle and move when the mower transmits.
 ## Wiring
 
 ```
- Mainboard service port                          ESP32-DevKitC V4
- (10-way Molex KK)
-                        PTC 0.75 A
-   8  5V  ────────────────[ ~~~ ]───────────┬───────────  5V
-                                            │
-                                     470 µF ┴ 100 nF
-                                            │
-   7  GND ──────────────────────────────────┴───────────  GND
-                                                    │
-                                            10 µF ──┴── 100 nF
-                                            (across 3V3-GND at the module)
+Service port (10-way Molex KK)                      ESP32-DevKitC V4
 
-   2  Tx  ──────────────────────────────────────────────  GPIO16  (RX)
 
-   1  Rx  ◄─────────────────────────────────────────────  GPIO17  (TX)
+POWER
 
-   9  3V3 ──  cut, heat shrink
-  10  18V ──  cut, heat shrink
- 3-6  n/c ──  cut, heat shrink
+  pos 8  5V ──[ PTC 0.75 A ]──┬──────────────────────►  5V
+                              │
+                             ═╧═  470 µF low ESR ∥ 100 nF
+                              │
+  pos 7  GND ─────────────────┴──────────────────────►  GND
+
+
+LOCAL DECOUPLING, at the WROOM module and not fed from the port
+
+                        ESP32  3V3 ──┬──
+                                     │
+                                    ═╧═  10 µF ∥ 100 nF
+                                     │
+                        ESP32  GND ──┴──
+
+
+SERIAL, UART2, 9600 8N1
+
+  pos 2  Tx ─────────────────────────────────────────►  GPIO16  RX
+
+  pos 1  Rx ◄─────────────────────────────────────────  GPIO17  TX
+
+
+NOT CONNECTED, cut short and heat shrunk
+
+  pos 3-6  unknown
+  pos 9    3V3
+  pos 10   18V
 ```
 
 ## Why these parts
