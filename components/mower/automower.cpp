@@ -229,6 +229,11 @@ namespace esphome
             uint8_t data[5] = {0x0F, 0xCA, reg, 0x00, value};
             ESP_LOGD("Automower", "Set timer reg 0x%02X = %u", reg, value);
             write_array(data, 5);
+            // Update the cache too. The entities read their value from it every
+            // 60s, while the slow poller only refreshes a timer register every
+            // few minutes, so without this a new time reverts on screen until
+            // the next read comes round.
+            register_values_[0x4A00 | reg] = value;
         }
 
         void Automower::set_timer_active(bool active)
@@ -237,6 +242,7 @@ namespace esphome
             uint8_t data[5] = {0x0F, 0xCA, 0x4E, 0x00, static_cast<uint8_t>(active ? 0x00 : 0x01)};
             ESP_LOGD("Automower", "Set timer active = %s", active ? "true" : "false");
             write_array(data, 5);
+            register_values_[0x4A4E] = active ? 0x00 : 0x01;
         }
 
         void Automower::checkUartRead()
