@@ -124,10 +124,16 @@ namespace esphome
 
         esphome::optional<esphome::ESPTime> Automower::get_timer_time(uint8_t hour_reg, uint8_t minute_reg)
         {
-            float h = get_register(0x4A00 | hour_reg);
-            float m = get_register(0x4A00 | minute_reg);
-            if (std::isnan(h) || std::isnan(m))
+            float hr = get_register(0x4A00 | hour_reg);
+            float mr = get_register(0x4A00 | minute_reg);
+            if (std::isnan(hr) || std::isnan(mr))
                 return {};
+            // Each timer register is one byte, but the reply carries a 16-bit
+            // word whose high byte belongs to a neighbouring register (a minute
+            // read returns e.g. 0x092D: 45 min, with the hour 0x09 on top).
+            // Only the low byte is this register's value.
+            float h = static_cast<float>(static_cast<uint16_t>(hr) & 0xFF);
+            float m = static_cast<float>(static_cast<uint16_t>(mr) & 0xFF);
             // A register that has not been written yet, or a garbled reply, can
             // hold anything. Report unknown rather than a nonsense clock time.
             if (h < 0.0f || h > 23.0f || m < 0.0f || m > 59.0f)
