@@ -68,7 +68,7 @@ namespace esphome
                 getClockYear,
                 getTimerActive,
                 getTimerDays};
-            for (int i = 0; i < 16; i++)
+            for (int i = 0; i < 8; i++)
                 slowCommands.push_back(TIMER_READ_CMDS[i]);
         }
 
@@ -122,18 +122,17 @@ namespace esphome
             return static_cast<float>(raw);
         }
 
-        esphome::optional<esphome::ESPTime> Automower::get_timer_time(uint8_t hour_reg, uint8_t minute_reg)
+        esphome::optional<esphome::ESPTime> Automower::get_timer_time(uint8_t reg)
         {
-            float hr = get_register(0x4A00 | hour_reg);
-            float mr = get_register(0x4A00 | minute_reg);
-            if (std::isnan(hr) || std::isnan(mr))
+            float v = get_register(0x4A00 | reg);
+            if (std::isnan(v))
                 return {};
-            // Each timer register is one byte, but the reply carries a 16-bit
-            // word whose high byte belongs to a neighbouring register (a minute
-            // read returns e.g. 0x092D: 45 min, with the hour 0x09 on top).
-            // Only the low byte is this register's value.
-            float h = static_cast<float>(static_cast<uint16_t>(hr) & 0xFF);
-            float m = static_cast<float>(static_cast<uint16_t>(mr) & 0xFF);
+            // One timer time is one 16-bit register at an even address: hour in
+            // the low byte, minute in the high byte (09:15 reads back 0x0F09).
+            // Verified against the keypad display on a 220AC.
+            uint16_t raw = static_cast<uint16_t>(v);
+            float h = static_cast<float>(raw & 0xFF);
+            float m = static_cast<float>(raw >> 8);
             // A register that has not been written yet, or a garbled reply, can
             // hold anything. Report unknown rather than a nonsense clock time.
             if (h < 0.0f || h > 23.0f || m < 0.0f || m > 59.0f)
@@ -150,7 +149,8 @@ namespace esphome
             float v = get_register(0x4A4E);
             if (std::isnan(v))
                 return {};
-            // Register is 0 when the timer is enabled, 1 when disabled.
+            // This is the keypad's "Bypass timer" box: 1 when ticked (the
+            // schedule is ignored), 0 when the schedule is in use.
             return v == 0.0f;
         }
 
@@ -296,23 +296,24 @@ namespace esphome
             queueFrame(data);
         }
 
-        void Automower::set_timer_register(uint8_t reg, uint8_t value)
+        void Automower::set_timer_time(uint8_t reg, uint8_t hour, uint8_t minute)
         {
             // Write address = read address with the high bit set (0x4A -> 0xCA).
-            // The value goes in the last byte, matching the mode/stop writes.
-            uint8_t data[5] = {0x0F, 0xCA, reg, 0x00, value};
-            ESP_LOGD("Automower", "Set timer reg 0x%02X = %u", reg, value);
+            // A write frame carries the value high byte first (mode AUTO is
+            // written as 00 01 and reads back as 0x0001), so minute then hour.
+            uint8_t data[5] = {0x0F, 0xCA, reg, minute, hour};
+            ESP_LOGD("Automower", "Set timer reg 0x%02X = %02u:%02u", reg, hour, minute);
             queueFrame(data);
             // Update the cache too. The entities read their value from it every
             // 60s, while the slow poller only refreshes a timer register every
             // few minutes, so without this a new time reverts on screen until
             // the next read comes round.
-            store_register(0x4A00 | reg, value);
+            store_register(0x4A00 | reg, static_cast<uint16_t>((minute << 8) | hour));
         }
 
         void Automower::set_timer_active(bool active)
         {
-            // 0 enables the timer, 1 disables it.
+            // 0 uses the schedule, 1 bypasses it.
             uint8_t data[5] = {0x0F, 0xCA, 0x4E, 0x00, static_cast<uint8_t>(active ? 0x00 : 0x01)};
             ESP_LOGD("Automower", "Set timer active = %s", active ? "true" : "false");
             queueFrame(data);
@@ -410,10 +411,8 @@ namespace esphome
                 case 0x36B1: case 0x36B3: case 0x36B5:
                 case 0x36B7: case 0x36B9: case 0x36BD:
                 case 0x4A4E: case 0x4A50:
-                case 0x4A38: case 0x4A39: case 0x4A3A: case 0x4A3B:
-                case 0x4A3C: case 0x4A3D: case 0x4A3E: case 0x4A3F:
-                case 0x4A40: case 0x4A41: case 0x4A42: case 0x4A43:
-                case 0x4A44: case 0x4A45: case 0x4A46: case 0x4A47:
+                case 0x4A38: case 0x4A3A: case 0x4A3C: case 0x4A3E:
+                case 0x4A40: case 0x4A42: case 0x4A44: case 0x4A46:
                     break;
                 default:
                     ESP_LOGW("Automower", "Unhandled address: 0x%04X with value 0x%04X", addr, val);

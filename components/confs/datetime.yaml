@@ -1,7 +1,8 @@
-# Timer schedule as HH:MM time pickers. Each entity reads two registers
-# (hour + minute) and writes them back on change. Register low bytes:
-#   weekday start/stop, weekend start/stop for timer 1 (0x38..0x3F)
-#   and timer 2 (0x40..0x47). Read addr = 0x4A00 | reg, write = 0xCA | reg.
+# Timer schedule as HH:MM time pickers. Each time is one 16-bit register at an
+# even address (hour in the low byte, minute in the high byte):
+#   timer 1 weekday start/stop 0x38/0x3A, weekend start/stop 0x3C/0x3E,
+#   timer 2 weekday start/stop 0x40/0x42, weekend start/stop 0x44/0x46.
+# Read addr = 0x4A00 | reg, write = 0xCA | reg.
 datetime:
   - platform: template
     name: "Timer 1 weekday start"
@@ -11,13 +12,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x38, 0x39);
+      return mower->get_timer_time(0x38);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x38, x.hour);
-            mower->set_timer_register(0x39, x.minute);
+            mower->set_timer_time(0x38, x.hour, x.minute);
 
   - platform: template
     name: "Timer 1 weekday stop"
@@ -27,13 +27,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x3A, 0x3B);
+      return mower->get_timer_time(0x3A);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x3A, x.hour);
-            mower->set_timer_register(0x3B, x.minute);
+            mower->set_timer_time(0x3A, x.hour, x.minute);
 
   - platform: template
     name: "Timer 1 weekend start"
@@ -43,13 +42,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x3C, 0x3D);
+      return mower->get_timer_time(0x3C);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x3C, x.hour);
-            mower->set_timer_register(0x3D, x.minute);
+            mower->set_timer_time(0x3C, x.hour, x.minute);
 
   - platform: template
     name: "Timer 1 weekend stop"
@@ -59,13 +57,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x3E, 0x3F);
+      return mower->get_timer_time(0x3E);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x3E, x.hour);
-            mower->set_timer_register(0x3F, x.minute);
+            mower->set_timer_time(0x3E, x.hour, x.minute);
 
   - platform: template
     name: "Timer 2 weekday start"
@@ -75,13 +72,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x40, 0x41);
+      return mower->get_timer_time(0x40);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x40, x.hour);
-            mower->set_timer_register(0x41, x.minute);
+            mower->set_timer_time(0x40, x.hour, x.minute);
 
   - platform: template
     name: "Timer 2 weekday stop"
@@ -91,13 +87,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x42, 0x43);
+      return mower->get_timer_time(0x42);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x42, x.hour);
-            mower->set_timer_register(0x43, x.minute);
+            mower->set_timer_time(0x42, x.hour, x.minute);
 
   - platform: template
     name: "Timer 2 weekend start"
@@ -107,13 +102,12 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x44, 0x45);
+      return mower->get_timer_time(0x44);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x44, x.hour);
-            mower->set_timer_register(0x45, x.minute);
+            mower->set_timer_time(0x44, x.hour, x.minute);
 
   - platform: template
     name: "Timer 2 weekend stop"
@@ -123,10 +117,9 @@ datetime:
     update_interval: 60s
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_time(0x46, 0x47);
+      return mower->get_timer_time(0x46);
     set_action:
       then:
         - lambda: |-
             esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-            mower->set_timer_register(0x46, x.hour);
-            mower->set_timer_register(0x47, x.minute);
+            mower->set_timer_time(0x46, x.hour, x.minute);

@@ -51,8 +51,9 @@ namespace esphome
       // template sensors/numbers defined in yaml. Returns NaN when the register
       // hasn't been read yet, so the lambda can skip publishing (return {}).
       float get_register(uint16_t addr, bool is_signed = false);
-      // Timer registers live at 0x4A00 | reg; pass the low reg bytes (e.g. 0x38).
-      esphome::optional<esphome::ESPTime> get_timer_time(uint8_t hour_reg, uint8_t minute_reg);
+      // Timer times live at 0x4A00 | reg, one even register per time; pass the
+      // low reg byte (e.g. 0x38).
+      esphome::optional<esphome::ESPTime> get_timer_time(uint8_t reg);
       esphome::optional<bool> get_timer_active();
 
       void setup() override;
@@ -68,10 +69,9 @@ namespace esphome
       void key_yes();
       void key_num(uint8_t num);
 
-      // Write a single timer register (0x4A00 | reg is the read address; the
-      // write uses the same low byte with the high bit set: 0xCA). value is the
-      // hour (0-23) or minute (0-59).
-      void set_timer_register(uint8_t reg, uint8_t value);
+      // Write one timer time (0x4A00 | reg is the read address; the write uses
+      // the same low byte with the high bit set: 0xCA).
+      void set_timer_time(uint8_t reg, uint8_t hour, uint8_t minute);
       void set_timer_active(bool active);
 
     protected:
@@ -175,16 +175,14 @@ namespace esphome
       static constexpr uint8_t getTimerActive[5] = {0x0F, 0x4A, 0x4E, 0x00, 0x00};
       static constexpr uint8_t getTimerDays[5] = {0x0F, 0x4A, 0x50, 0x00, 0x00};
 
-      // 16 timer registers 0x4A38..0x4A47 (t1/t2 x weekday/weekend x start/stop x h/m).
-      static constexpr uint8_t TIMER_READ_CMDS[16][5] = {
-          {0x0F, 0x4A, 0x38, 0x00, 0x00}, {0x0F, 0x4A, 0x39, 0x00, 0x00},
-          {0x0F, 0x4A, 0x3A, 0x00, 0x00}, {0x0F, 0x4A, 0x3B, 0x00, 0x00},
-          {0x0F, 0x4A, 0x3C, 0x00, 0x00}, {0x0F, 0x4A, 0x3D, 0x00, 0x00},
-          {0x0F, 0x4A, 0x3E, 0x00, 0x00}, {0x0F, 0x4A, 0x3F, 0x00, 0x00},
-          {0x0F, 0x4A, 0x40, 0x00, 0x00}, {0x0F, 0x4A, 0x41, 0x00, 0x00},
-          {0x0F, 0x4A, 0x42, 0x00, 0x00}, {0x0F, 0x4A, 0x43, 0x00, 0x00},
-          {0x0F, 0x4A, 0x44, 0x00, 0x00}, {0x0F, 0x4A, 0x45, 0x00, 0x00},
-          {0x0F, 0x4A, 0x46, 0x00, 0x00}, {0x0F, 0x4A, 0x47, 0x00, 0x00}};
+      // 8 timer times at the even registers 0x4A38..0x4A46 (t1/t2 x weekday/
+      // weekend x start/stop), each one word: hour low byte, minute high byte.
+      // Odd addresses only return a word straddling two times.
+      static constexpr uint8_t TIMER_READ_CMDS[8][5] = {
+          {0x0F, 0x4A, 0x38, 0x00, 0x00}, {0x0F, 0x4A, 0x3A, 0x00, 0x00},
+          {0x0F, 0x4A, 0x3C, 0x00, 0x00}, {0x0F, 0x4A, 0x3E, 0x00, 0x00},
+          {0x0F, 0x4A, 0x40, 0x00, 0x00}, {0x0F, 0x4A, 0x42, 0x00, 0x00},
+          {0x0F, 0x4A, 0x44, 0x00, 0x00}, {0x0F, 0x4A, 0x46, 0x00, 0x00}};
 
       std::vector<const uint8_t *> fastCommands;
       std::vector<const uint8_t *> slowCommands;
