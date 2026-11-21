@@ -144,14 +144,146 @@ namespace esphome
             return t;
         }
 
-        esphome::optional<bool> Automower::get_timer_active()
+        esphome::optional<bool> Automower::get_timer_bypass()
         {
             float v = get_register(0x4A4E);
             if (std::isnan(v))
                 return {};
-            // This is the keypad's "Bypass timer" box: 1 when ticked (the
-            // schedule is ignored), 0 when the schedule is in use.
-            return v == 0.0f;
+            // The keypad's "Bypass timer" box: 1 when ticked (the schedule is
+            // ignored), 0 when the schedule is in use.
+            return v != 0.0f;
+        }
+
+        esphome::optional<bool> Automower::get_week_day(uint8_t bit)
+        {
+            float v = get_register(0x4A50);
+            if (std::isnan(v) || bit > 6)
+                return {};
+            return ((static_cast<uint16_t>(v) >> bit) & 0x01) != 0;
+        }
+
+        // ---- Register scanner ----
+
+        void Automower::reset_scan()
+        {
+            scan_addr_ = scan_start_;
+            scan_pass_ = 0;
+            scan_changes_ = 0;
+            scan_no_reply_ = 0;
+            scan_pending_ = false;
+            scan_values_.clear();
+            scan_recent_.clear();
+        }
+
+        void Automower::set_scan_enabled(bool enabled)
+        {
+            if (enabled && !scan_enabled_)
+            {
+                reset_scan();
+                ESP_LOGI("Automower", "SCAN start 0x%04X-0x%04X", scan_start_, scan_end_);
+            }
+            else if (!enabled && scan_enabled_)
+            {
+                ESP_LOGI("Automower", "SCAN stop after %u passes, %u changes", (unsigned) scan_pass_, (unsigned) scan_changes_);
+            }
+            scan_enabled_ = enabled;
+        }
+
+        bool Automower::set_scan_range(const std::string &range)
+        {
+            unsigned start = 0, end = 0;
+            if (sscanf(range.c_str(), "%x-%x", &start, &end) != 2 || start > end || end > 0x7FFF ||
+                end - start >= SCAN_MAX_SPAN)
+            {
+                ESP_LOGW("Automower", "SCAN range '%s' rejected: want hex START-END, END <= 7FFF, at most %u addresses",
+                         range.c_str(), (unsigned) SCAN_MAX_SPAN);
+                return false;
+            }
+            scan_start_ = static_cast<uint16_t>(start);
+            scan_end_ = static_cast<uint16_t>(end);
+            reset_scan();
+            ESP_LOGI("Automower", "SCAN range 0x%04X-0x%04X", scan_start_, scan_end_);
+            return true;
+        }
+
+        std::string Automower::get_scan_range() const
+        {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%04X-%04X", scan_start_, scan_end_);
+            return std::string(buf);
+        }
+
+        std::string Automower::get_scan_status() const
+        {
+            if (!scan_enabled_)
+                return "off";
+            char buf[96];
+            snprintf(buf, sizeof(buf), "pass %u at %04X, %u read, %u silent, %u changes",
+                     (unsigned) scan_pass_ + 1, scan_addr_, (unsigned) scan_values_.size(),
+                     (unsigned) scan_no_reply_, (unsigned) scan_changes_);
+            std::string s(buf);
+            // Newest changes first, kept short enough for a HA state (255).
+            for (auto it = scan_recent_.rbegin(); it != scan_recent_.rend(); ++it)
+            {
+                if (s.size() + it->size() + 2 > 250)
+                    break;
+                s += "; " + *it;
+            }
+            return s;
+        }
+
+        void Automower::sendScanFrame()
+        {
+            // Skip the keypad's own addresses; reads only, the write bit stays clear.
+            while (scan_addr_ == 0x005F || scan_addr_ == 0x0F80)
+                advanceScan();
+            uint8_t data[5] = {0x0F, static_cast<uint8_t>((scan_addr_ >> 8) & 0x7F),
+                               static_cast<uint8_t>(scan_addr_ & 0xFF), 0x00, 0x00};
+            scan_pending_ = true;
+            sendFrame(data, true, SCAN_REPLY_TIMEOUT_MS);
+        }
+
+        void Automower::onScanReply(uint16_t addr, uint16_t val)
+        {
+            auto it = std::lower_bound(scan_values_.begin(), scan_values_.end(), addr,
+                                       [](const std::pair<uint16_t, uint16_t> &e, uint16_t a)
+                                       { return e.first < a; });
+            if (it != scan_values_.end() && it->first == addr)
+            {
+                if (it->second != val)
+                {
+                    ESP_LOGW("Automower", "SCAN CHANGE 0x%04X: 0x%04X -> 0x%04X", addr, it->second, val);
+                    char buf[24];
+                    snprintf(buf, sizeof(buf), "%04X:%04X>%04X", addr, it->second, val);
+                    scan_recent_.push_back(buf);
+                    if (scan_recent_.size() > 12)
+                        scan_recent_.erase(scan_recent_.begin());
+                    scan_changes_++;
+                    it->second = val;
+                }
+            }
+            else
+            {
+                scan_values_.insert(it, std::make_pair(addr, val));
+                ESP_LOGI("Automower", "SCAN 0x%04X = 0x%04X", addr, val);
+            }
+            advanceScan();
+        }
+
+        void Automower::advanceScan()
+        {
+            if (scan_addr_ >= scan_end_)
+            {
+                ESP_LOGI("Automower", "SCAN pass %u done: %u read, %u silent, %u changes", (unsigned) scan_pass_ + 1,
+                         (unsigned) scan_values_.size(), (unsigned) scan_no_reply_, (unsigned) scan_changes_);
+                scan_addr_ = scan_start_;
+                scan_pass_++;
+                scan_no_reply_ = 0;
+            }
+            else
+            {
+                scan_addr_++;
+            }
         }
 
         void Automower::setup() {}
@@ -163,6 +295,8 @@ namespace esphome
             ESP_LOGCONFIG("Automower", "  Fast registers: %u", (unsigned) fastCommands.size());
             ESP_LOGCONFIG("Automower", "  Slow registers: %u", (unsigned) slowCommands.size());
             ESP_LOGCONFIG("Automower", "  Slow poll every: %u sends", (unsigned) SLOW_POLL_EVERY);
+            ESP_LOGCONFIG("Automower", "  Register scan: %s, range %s", scan_enabled_ ? "on" : "off",
+                          get_scan_range().c_str());
         }
 
         // Sending is driven from loop(), not from this tick. update_interval is
@@ -181,10 +315,20 @@ namespace esphome
             // register the robot never answers cannot stall the cycle.
             if (awaiting_reply_)
             {
-                if ((now - last_send_time_) < UART_REPLY_TIMEOUT_MS)
+                if ((now - last_send_time_) < reply_timeout_ms_)
                     return;
-                ESP_LOGD("Automower", "No reply for 0x%04X, moving on", expected_addr_);
                 awaiting_reply_ = false;
+                if (scan_pending_)
+                {
+                    scan_pending_ = false;
+                    scan_no_reply_++;
+                    ESP_LOGD("Automower", "SCAN 0x%04X no reply", expected_addr_);
+                    advanceScan();
+                }
+                else
+                {
+                    ESP_LOGD("Automower", "No reply for 0x%04X, moving on", expected_addr_);
+                }
             }
 
             if ((now - last_send_time_) < this->get_update_interval())
@@ -205,6 +349,18 @@ namespace esphome
 
         void Automower::sendNextPoll()
         {
+            // While scanning, two of every three sends go to the scan so a pass
+            // finishes in reasonable time; the normal poll keeps the rest.
+            if (scan_enabled_)
+            {
+                if (++scan_tick_ >= 3)
+                    scan_tick_ = 0;
+                if (scan_tick_ != 0)
+                {
+                    sendScanFrame();
+                    return;
+                }
+            }
             const uint8_t *cmd;
             // Interleave one slow-tier command every SLOW_POLL_EVERY sends.
             if (++scheduler_tick_ >= SLOW_POLL_EVERY && !slowCommands.empty())
@@ -223,12 +379,13 @@ namespace esphome
             sendFrame(cmd, true);
         }
 
-        void Automower::sendFrame(const uint8_t *data, bool expect_reply)
+        void Automower::sendFrame(const uint8_t *data, bool expect_reply, uint32_t timeout_ms)
         {
             ESP_LOGD("Automower", "UART TX: %02X %02X %02X %02X %02X", data[0], data[1], data[2], data[3], data[4]);
             write_array(data, 5);
             last_send_time_ = millis();
             awaiting_reply_ = expect_reply;
+            reply_timeout_ms_ = timeout_ms;
             if (expect_reply)
                 expected_addr_ = ((data[1] & 0x7F) << 8) | data[2];
         }
@@ -311,13 +468,56 @@ namespace esphome
             store_register(0x4A00 | reg, static_cast<uint16_t>((minute << 8) | hour));
         }
 
-        void Automower::set_timer_active(bool active)
+        void Automower::set_timer_bypass(bool bypass)
         {
-            // 0 uses the schedule, 1 bypasses it.
-            uint8_t data[5] = {0x0F, 0xCA, 0x4E, 0x00, static_cast<uint8_t>(active ? 0x00 : 0x01)};
-            ESP_LOGD("Automower", "Set timer active = %s", active ? "true" : "false");
+            // 1 ticks the keypad's "Bypass timer" box, 0 uses the schedule.
+            uint8_t data[5] = {0x0F, 0xCA, 0x4E, 0x00, static_cast<uint8_t>(bypass ? 0x01 : 0x00)};
+            ESP_LOGD("Automower", "Set timer bypass = %s", bypass ? "true" : "false");
             queueFrame(data);
-            store_register(0x4A4E, active ? 0x00 : 0x01);
+            store_register(0x4A4E, bypass ? 0x01 : 0x00);
+        }
+
+        void Automower::set_week_day(uint8_t bit, bool on)
+        {
+            float v = get_register(0x4A50);
+            if (std::isnan(v) || bit > 6)
+            {
+                // Without the current mask a write would clear the other days.
+                ESP_LOGW("Automower", "Week timer days not read yet, ignoring change");
+                return;
+            }
+            uint8_t mask = static_cast<uint8_t>(static_cast<uint16_t>(v) & 0x7F);
+            if (on)
+                mask |= (1 << bit);
+            else
+                mask &= ~(1 << bit);
+            uint8_t data[5] = {0x0F, 0xCA, 0x50, 0x00, mask};
+            ESP_LOGD("Automower", "Set week timer days = 0x%02X", mask);
+            queueFrame(data);
+            store_register(0x4A50, mask);
+        }
+
+        void Automower::set_clock(const esphome::ESPTime &t)
+        {
+            if (!t.is_valid())
+            {
+                ESP_LOGW("Automower", "No valid time to set the mower clock from");
+                return;
+            }
+            // Same registers as the reads, write bit set (0x36 -> 0xB6); each is
+            // a small value in the low byte. Queued writes go out one per poll
+            // gap, so the clock lands a few seconds behind; seconds go last.
+            const uint8_t regs[6] = {0xBD, 0xB9, 0xB7, 0xB5, 0xB3, 0xB1};
+            const uint8_t vals[6] = {static_cast<uint8_t>(t.year % 100), t.month, t.day_of_month,
+                                     t.hour, t.minute, t.second};
+            for (int i = 0; i < 6; i++)
+            {
+                uint8_t data[5] = {0x0F, 0xB6, regs[i], 0x00, vals[i]};
+                queueFrame(data);
+                store_register(0x3600 | regs[i], vals[i]);
+            }
+            ESP_LOGI("Automower", "Set mower clock to 20%02u-%02u-%02u %02u:%02u:%02u", vals[0], vals[1], vals[2],
+                     vals[3], vals[4], vals[5]);
         }
 
         void Automower::checkUartRead()
@@ -340,8 +540,17 @@ namespace esphome
                 // talks on the same wires, and treating its traffic as our
                 // reply would let us send while the real answer is still in
                 // flight. Anything unmatched falls through to the timeout.
+                bool scanned = false;
                 if (awaiting_reply_ && addr == expected_addr_)
+                {
                     awaiting_reply_ = false;
+                    if (scan_pending_)
+                    {
+                        scan_pending_ = false;
+                        scanned = true;
+                        onScanReply(addr, val);
+                    }
+                }
 
                 // Raw address bytes keep the write bit, so an acknowledged
                 // write (812C) is distinguishable from a read reply (012C).
@@ -402,7 +611,7 @@ namespace esphome
                     setStopStatusFromCode(val);
                     break;
                 // Raw registers cached above and exposed via get_register() /
-                // get_timer_time() / get_timer_active() to the yaml entities.
+                // get_timer_time() / get_timer_bypass() / get_week_day() to the yaml entities.
                 case 0x00B1: case 0x01EB: case 0x01F0:
                 case 0x0234: case 0x0235: case 0x0236:
                 case 0x0038: case 0x01B9:
@@ -415,7 +624,9 @@ namespace esphome
                 case 0x4A40: case 0x4A42: case 0x4A44: case 0x4A46:
                     break;
                 default:
-                    ESP_LOGW("Automower", "Unhandled address: 0x%04X with value 0x%04X", addr, val);
+                    // Scanned addresses are logged by the scanner itself.
+                    if (!scanned)
+                        ESP_LOGW("Automower", "Unhandled address: 0x%04X with value 0x%04X", addr, val);
                     break;
                 }
             }

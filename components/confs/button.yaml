@@ -2,6 +2,17 @@ button:
   - platform: restart
     name: "Restart"
 
+  # Set the mower clock from Home Assistant's time. The mower does not follow
+  # daylight saving time, so press this after the change. Needs the
+  # `homeassistant_time` time source from the device yaml.
+  - platform: template
+    name: "Sync mower clock"
+    icon: mdi:clock-check-outline
+    entity_category: config
+    on_press:
+      - lambda: |-
+          ((esphome::mower::Automower *) id(mower_id))->set_clock(id(homeassistant_time).now());
+
   # The wheel motor drive registers are reachable through set_left_motor and
   # set_right_motor in the component, but are deliberately not exposed as
   # buttons: a stray press moves a wheel on a machine standing outdoors.

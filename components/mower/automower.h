@@ -54,7 +54,20 @@ namespace esphome
       // Timer times live at 0x4A00 | reg, one even register per time; pass the
       // low reg byte (e.g. 0x38).
       esphome::optional<esphome::ESPTime> get_timer_time(uint8_t reg);
-      esphome::optional<bool> get_timer_active();
+      // 0x4A4E, the keypad's "Bypass timer" box: true when ticked.
+      esphome::optional<bool> get_timer_bypass();
+      // 0x4A50, the keypad's week timer boxes: bit 0 = Monday .. bit 6 = Sunday.
+      esphome::optional<bool> get_week_day(uint8_t bit);
+
+      // Register scanner, a tool for mapping unknown registers. While enabled,
+      // two of every three sends read the next address in the scan range; a
+      // first-pass value is logged as "SCAN", a later change as "SCAN CHANGE".
+      void set_scan_enabled(bool enabled);
+      bool get_scan_enabled() const { return scan_enabled_; }
+      // Range as hex "4A00-4AFF", at most 1024 addresses, reads only (<= 7FFF).
+      bool set_scan_range(const std::string &range);
+      std::string get_scan_range() const;
+      std::string get_scan_status() const;
 
       void setup() override;
       void update() override;
@@ -72,7 +85,10 @@ namespace esphome
       // Write one timer time (0x4A00 | reg is the read address; the write uses
       // the same low byte with the high bit set: 0xCA).
       void set_timer_time(uint8_t reg, uint8_t hour, uint8_t minute);
-      void set_timer_active(bool active);
+      void set_timer_bypass(bool bypass);
+      void set_week_day(uint8_t bit, bool on);
+      // Write the mower clock (0x36B1..0x36BD, two-digit year).
+      void set_clock(const esphome::ESPTime &t);
 
     protected:
       bool stopStatus = false;
@@ -87,6 +103,27 @@ namespace esphome
       // If a polled command gets no reply within this window we stop waiting and
       // move on, so a register the robot never answers can't stall the cycle.
       static constexpr uint32_t UART_REPLY_TIMEOUT_MS = 2000;
+      // Scanned addresses may not exist, so do not wait as long for them.
+      static constexpr uint32_t SCAN_REPLY_TIMEOUT_MS = 300;
+      uint32_t reply_timeout_ms_ = UART_REPLY_TIMEOUT_MS;
+
+      // Register scanner state.
+      bool scan_enabled_ = false;
+      bool scan_pending_ = false;
+      uint16_t scan_start_ = 0x4A00;
+      uint16_t scan_end_ = 0x4AFF;
+      uint16_t scan_addr_ = 0x4A00;
+      uint32_t scan_pass_ = 0;
+      uint32_t scan_changes_ = 0;
+      uint32_t scan_no_reply_ = 0;
+      uint8_t scan_tick_ = 0;
+      static constexpr uint16_t SCAN_MAX_SPAN = 1024;
+      std::vector<std::pair<uint16_t, uint16_t>> scan_values_;
+      std::vector<std::string> scan_recent_;
+      void reset_scan();
+      void sendScanFrame();
+      void onScanReply(uint16_t addr, uint16_t val);
+      void advanceScan();
 
       // Frames queued by buttons, selects and switches. The bus is half duplex
       // and shared, so user writes are handed to the scheduler instead of being
@@ -98,7 +135,7 @@ namespace esphome
       std::vector<Frame> write_queue_;
       void queueFrame(const uint8_t *data);
       void serviceBus();
-      void sendFrame(const uint8_t *data, bool expect_reply);
+      void sendFrame(const uint8_t *data, bool expect_reply, uint32_t timeout_ms = UART_REPLY_TIMEOUT_MS);
 
       // Round-robin cursors for the two poll tiers plus the interleave counter.
       size_t fast_index_ = 0;

@@ -1,0 +1,50 @@
+# Register scanner: a tool for mapping registers that are not yet known.
+#
+# Set "Scan range" (hex START-END, at most 1024 addresses, reads only) and turn
+# on "Register scan". While it runs, two of every three bus frames read the
+# next address in the range, so normal polling slows down accordingly; at the
+# 1 s bus pace a 256-address pass takes about six minutes. The first value of
+# each address is logged as "SCAN 0xADDR = 0xVALUE", a later change as
+# "SCAN CHANGE 0xADDR: old -> new" (warning level). "Scan status" shows
+# progress and the latest changes. Change a setting on the keypad while a scan
+# runs and the change shows which register holds it.
+#
+# The scanner is off after every restart and only ever reads.
+switch:
+  - platform: template
+    name: "Register scan"
+    id: register_scan
+    icon: mdi:magnify-scan
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_scan_enabled();
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_scan_enabled(true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_scan_enabled(false);
+
+text:
+  - platform: template
+    name: "Scan range"
+    id: scan_range
+    icon: mdi:arrow-expand-horizontal
+    entity_category: config
+    mode: text
+    min_length: 9
+    max_length: 9
+    update_interval: 5s
+    lambda: |-
+      return {((esphome::mower::Automower *) id(mower_id))->get_scan_range()};
+    set_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_scan_range(x);
+
+text_sensor:
+  - platform: template
+    name: "Scan status"
+    id: scan_status
+    icon: mdi:magnify-scan
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      return {((esphome::mower::Automower *) id(mower_id))->get_scan_status()};

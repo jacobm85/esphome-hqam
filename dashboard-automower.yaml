@@ -10,10 +10,11 @@
 #    Search for BATT_MAX and set it to the value seen right after
 #    a full charge. Currently 2200.
 #
-#  REQUIRES FIRMWARE e40e916 OR LATER:
+#  REQUIRES THIS REPOSITORY AT THE COMMIT THAT ADDED THESE ENTITIES OR LATER:
 #    sensor.automower_status, sensor.automower_total_cutting_time,
 #    sensor.automower_battery_charged_capacity, sensor.automower_mower_clock,
-#    switch.automower_timer_active, the datetime entities for the schedule.
+#    switch.automower_bypass_timer, switch.automower_week_timer_*, the
+#    datetime entities for the schedule, button.automower_sync_mower_clock.
 #
 #  Paste via Dashboard > Edit > Raw configuration editor.
 #  Replace all existing content.
@@ -403,9 +404,9 @@ views:
             heading_style: title
 
           - type: tile
-            entity: switch.automower_timer_active
-            name: Timer aktiv
-            icon: mdi:timer-cog
+            entity: switch.automower_bypass_timer
+            name: Förbikoppla timer
+            icon: mdi:timer-off-outline
             features:
               - type: toggle
 
@@ -450,6 +451,63 @@ views:
             entity: time.automower_timer_2_weekend_stop
             name: Helg stopp
             icon: mdi:clock-end
+
+          - type: heading
+            heading: Veckotimer
+            heading_style: subtitle
+
+          - type: tile
+            entity: switch.automower_week_timer_monday
+            name: Mån
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+          - type: tile
+            entity: switch.automower_week_timer_tuesday
+            name: Tis
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+          - type: tile
+            entity: switch.automower_week_timer_wednesday
+            name: Ons
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+          - type: tile
+            entity: switch.automower_week_timer_thursday
+            name: Tor
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+          - type: tile
+            entity: switch.automower_week_timer_friday
+            name: Fre
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+          - type: tile
+            entity: switch.automower_week_timer_saturday
+            name: Lör
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+          - type: tile
+            entity: switch.automower_week_timer_sunday
+            name: Sön
+            icon: mdi:calendar-check
+            features:
+              - type: toggle
+
+          - type: tile
+            entity: button.automower_sync_mower_clock
+            name: Synka klippar-klockan
+            icon: mdi:clock-check-outline
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.automower_sync_mower_clock
 
       # =============================================================
       #  Measurements

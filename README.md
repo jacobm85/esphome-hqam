@@ -148,6 +148,45 @@ fetched until they are added there.
 Requires ESPHome 2024.6 or later for the `datetime` platform and the `ota:`
 list syntax.
 
+## Protocol and register map
+
+Every frame is five bytes: `0F`, two address bytes, two value bytes. A read
+sends the address with the value bytes zero; the reply carries the same
+address and the value **low byte first** (`0F 4A 50 11 00` = 0x0011). A write
+sets the address's high bit (`0x4A` -> `0xCA`, `0x01` -> `0x81`) and carries
+the value **high byte first** (`0F CA 50 00 11`).
+
+Timer registers, verified against the keypad of a 220AC:
+
+| Register | Keypad (Swedish) | Value |
+| --- | --- | --- |
+| `0x4A4E` | Förbikoppla timer | 1 = box ticked (schedule ignored), 0 = schedule used |
+| `0x4A50` | Veckotimer | day boxes, bit 0 = Monday .. bit 6 = Sunday |
+| `0x4A38` / `0x4A3A` | Dagtimer, start/stop time 1 | one time per register: hour low byte, minute high byte |
+| `0x4A40` / `0x4A42` | Dagtimer, start/stop time 2 | as above |
+| `0x4A3C` / `0x4A3E` | Dagtimer Fr-Sö (Helgtimer), start/stop time 1 | as above |
+| `0x4A44` / `0x4A46` | Dagtimer Fr-Sö (Helgtimer), start/stop time 2 | as above |
+
+The odd addresses in between are not separate fields: a read there returns a
+word straddling two times (the minute of one and the hour of the next), which
+is why older register lists show "minute" registers that look swapped. Write a
+time as one frame: `0F CA <reg> <minute> <hour>`.
+
+Not yet located: the on/off boxes for Dagtimer, Veckotimer and Helgtimer.
+
+The clock lives at `0x36B1` (second), `0x36B3` (minute), `0x36B5` (hour),
+`0x36B7` (day), `0x36B9` (month) and `0x36BD` (two-digit year). The mower does
+not follow daylight saving time; the "Sync mower clock" button sets it from
+Home Assistant.
+
+### Register scanner
+
+`components/confs/scan.yaml` adds a scanner for mapping unknown registers: set
+"Scan range" (hex `START-END`, reads only), turn on "Register scan", then
+change a setting on the keypad. The log shows each address's first value as
+`SCAN` and any later change as `SCAN CHANGE`, and "Scan status" lists the
+latest changes. It is off after every restart.
+
 ## Home Assistant
 
 [`dashboard-automower.yaml`](dashboard-automower.yaml) is a control panel

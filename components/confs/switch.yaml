@@ -1,22 +1,110 @@
+# All switches here mirror a box in the mower's Timer menu. Their state comes
+# from the mower, so restore_mode is DISABLED: any other mode makes ESPHome run
+# a turn_on/turn_off action at boot and write to the mower on every restart.
 switch:
+  # 0x4A4E, "Bypass timer" (Förbikoppla timer): on = the schedule is ignored.
   - platform: template
-    name: "Timer active"
-    id: timer_active
-    icon: mdi:timer-cog
-    # The state comes from the mower. Any other restore mode makes ESPHome run
-    # turn_off_action at boot, which would tick "Bypass timer" on every restart.
+    name: "Bypass timer"
+    id: timer_bypass
+    icon: mdi:timer-off-outline
     restore_mode: DISABLED
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-      return mower->get_timer_active();
+      return mower->get_timer_bypass();
     turn_on_action:
       - lambda: |-
           esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-          mower->set_timer_active(true);
+          mower->set_timer_bypass(true);
     turn_off_action:
       - lambda: |-
           esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
-          mower->set_timer_active(false);
+          mower->set_timer_bypass(false);
+
+  # 0x4A50, the week timer day boxes: bit 0 = Monday .. bit 6 = Sunday.
+  - platform: template
+    name: "Week timer Monday"
+    id: week_timer_mon
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(0);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(0, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(0, false);
+  - platform: template
+    name: "Week timer Tuesday"
+    id: week_timer_tue
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(1);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(1, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(1, false);
+  - platform: template
+    name: "Week timer Wednesday"
+    id: week_timer_wed
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(2);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(2, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(2, false);
+  - platform: template
+    name: "Week timer Thursday"
+    id: week_timer_thu
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(3);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(3, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(3, false);
+  - platform: template
+    name: "Week timer Friday"
+    id: week_timer_fri
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(4);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(4, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(4, false);
+  - platform: template
+    name: "Week timer Saturday"
+    id: week_timer_sat
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(5);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(5, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(5, false);
+  - platform: template
+    name: "Week timer Sunday"
+    id: week_timer_sun
+    icon: mdi:calendar-check
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: |-
+      return ((esphome::mower::Automower *) id(mower_id))->get_week_day(6);
+    turn_on_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(6, true);
+    turn_off_action:
+      - lambda: ((esphome::mower::Automower *) id(mower_id))->set_week_day(6, false);
 
 # ---- Reference: raw UART frames from the original reverse-engineering ----
 # switch:
@@ -77,13 +165,16 @@ switch:
 #     name: "R minuterie status"
 #     data: [0x0F, 0x4A, 0x4E, 0x00, 0x00]
 
+#   NOTE: 0x4A4E is the keypad's "Bypass timer" box (verified on a 220AC).
+#   "allumer" below turns the bypass on, i.e. the schedule OFF; the German
+#   W_TIMERAKTIV/W_TIMERINAKTIV names further down describe it correctly.
 #   - platform: uart
 #     name: "W minuterie => allumer "
 #     data: [0x0F, 0xCA, 0x4E, 0x00, 0x01]
 
 #   - platform: uart
 #     name: "W minuterie => éteindre"
-#     data: [0x0F, 0xCA, 0x4E, 0x00, 0x00]    
+#     data: [0x0F, 0xCA, 0x4E, 0x00, 0x00]
 
 
 
