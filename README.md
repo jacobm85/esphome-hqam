@@ -177,8 +177,10 @@ shows a box ticked while any of its four times is set and unticked when all
 four are 00:00 (Dagtimer `0x4A38`, `0x4A3A`, `0x4A40`, `0x4A42`; Helgtimer
 `0x4A3C`, `0x4A3E`, `0x4A44`, `0x4A46`). The box cannot be unticked on its
 own: the keypad only clears it by resetting the times, and writing the times
-back ticks it again. Scans of `0x4A00`-`0x4AFF` showed no other change. The
-Veckotimer box is not yet checked.
+back ticks it again. The Veckotimer box likewise follows `0x4A50`: it is
+unticked when all seven days are selected (`0x7F`, mow every day) and ticked
+for any narrower choice. Scans of `0x4A00`-`0x4AFF` showed no other change
+for any of the three boxes, so none of them needs a switch of its own.
 
 The clock lives at `0x36B1` (second), `0x36B3` (minute), `0x36B5` (hour),
 `0x36B7` (day), `0x36B9` (month) and `0x36BD` (two-digit year). The mower does
