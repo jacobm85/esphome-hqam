@@ -172,7 +172,12 @@ word straddling two times (the minute of one and the hour of the next), which
 is why older register lists show "minute" registers that look swapped. Write a
 time as one frame: `0F CA <reg> <minute> <hour>`.
 
-Not yet located: the on/off boxes for Dagtimer, Veckotimer and Helgtimer.
+The Dagtimer box has no register of its own. The keypad shows it ticked
+while any Dagtimer time is set and unticked when all four (`0x4A38`, `0x4A3A`,
+`0x4A40`, `0x4A42`) are 00:00; unticking it on the keypad resets the four
+times, and writing them back ticks it again. A full scan of `0x4A00`-`0x4AFF`
+showed no other change. The Veckotimer and Helgtimer boxes are not yet
+checked.
 
 The clock lives at `0x36B1` (second), `0x36B3` (minute), `0x36B5` (hour),
 `0x36B7` (day), `0x36B9` (month) and `0x36BD` (two-digit year). The mower does
