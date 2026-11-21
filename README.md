@@ -148,6 +148,18 @@ fetched until they are added there.
 Requires ESPHome 2024.6 or later for the `datetime` platform and the `ota:`
 list syntax.
 
+## Entities
+
+| Type | Entities |
+| --- | --- |
+| Select | Mode select (MAN, AUTO, HOME, DEMO) |
+| Switch | Bypass timer (`0x4A4E`), Week timer Monday .. Sunday (`0x4A50`), Register scan |
+| Time | Timer 1/2 weekday start/stop, Timer 1/2 weekend start/stop |
+| Button | Keypad keys (0-9, A-C, HOME, MAN/AUTO, Cancel, Up, Down, Yes), Stop, Reset Stop, Sync mower clock, Restart |
+| Sensor | Battery used, voltage, current, temperature, capacities; charging and mowing time; total cutting time; blade motor speed; wheel speeds; loop signal quality; square mode percent; firmware version; raw diagnostics |
+| Text sensor | Current mode, Status, Mower clock, Last received code, Scan status |
+| Text | Scan range |
+
 ## Protocol and register map
 
 Every frame is five bytes: `0F`, two address bytes, two value bytes. A read
@@ -203,6 +215,11 @@ replica, pasted via Dashboard > Edit > Raw configuration editor. Requires
 The schedule, measurements and diagnostics use the same panel and LCD style
 as the display; tap a value to open its history or, for a timer time, to
 change it.
+
+The dashboard and the cards expect entity IDs of the form
+`sensor.automower_status`. If the device sits in an area, Home Assistant may
+prefix new entities with the area name; rename them to `*.automower_*` or
+adjust the IDs in the YAML.
 
 [`cards/`](cards) holds two matching info cards for other dashboards, one
 compact for a phone and one larger for a tablet. Both show mode, status and
