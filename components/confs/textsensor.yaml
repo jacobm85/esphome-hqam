@@ -42,7 +42,10 @@ text_sensor:
       float y  = mower->get_register(0x36BD);
       if (std::isnan(s) || std::isnan(mi) || std::isnan(h) ||
           std::isnan(d) || std::isnan(mo) || std::isnan(y)) return {};
+      // The mower stores a two-digit year (26 for 2026).
+      int year = (int) y;
+      if (year < 100) year += 2000;
       char buf[24];
       snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
-               (int) y, (int) mo, (int) d, (int) h, (int) mi, (int) s);
+               year, (int) mo, (int) d, (int) h, (int) mi, (int) s);
       return {std::string(buf)};

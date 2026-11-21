@@ -486,7 +486,7 @@ views:
             name: Kapacitet
             icon: mdi:battery
             features:
-              - type: history-chart
+              - type: trend-graph
                 hours_to_show: 48
           - type: tile
             entity: sensor.automower_battery_capacity

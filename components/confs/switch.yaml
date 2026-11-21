@@ -3,6 +3,9 @@ switch:
     name: "Timer active"
     id: timer_active
     icon: mdi:timer-cog
+    # The state comes from the mower. Any other restore mode makes ESPHome run
+    # turn_off_action at boot, which would tick "Bypass timer" on every restart.
+    restore_mode: DISABLED
     lambda: |-
       esphome::mower::Automower *mower = (esphome::mower::Automower *) id(mower_id);
       return mower->get_timer_active();
