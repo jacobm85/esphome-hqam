@@ -1,0 +1,92 @@
+# Automower info card, tablet size. Mode, status, activity and battery on
+# an LCD in the control panel's style; a tap opens the Automower
+# dashboard. Requires button-card. Paste as a card in any dashboard.
+type: custom:button-card
+entity: sensor.automower_current_mode
+show_icon: false
+show_name: false
+show_state: false
+tap_action:
+  action: navigate
+  navigation_path: /dashboard-automower/automower
+grid_options:
+  columns: 12
+custom_fields:
+  brand: HUSQVARNA
+  more: AUTOMOWER 220 AC ›
+  lcd: >
+    [[[
+      var BATT_MAX = 2200;
+      var ok = function (e) {
+        return e && e.state !== undefined && e.state !== 'unknown'
+          && e.state !== 'unavailable' && String(e.state).trim() !== '';
+      };
+      var md = states['sensor.automower_current_mode'];
+      var st = states['sensor.automower_status'];
+      var bu = states['sensor.automower_battery_used'];
+      var bv = states['sensor.automower_battery_voltage'];
+      var bl = states['sensor.automower_blade_motor_speed'];
+      var mw = states['sensor.automower_mowing_time'];
+      var mode = ok(md) ? md.state.toUpperCase() : '- - - -';
+      var status = ok(st) ? st.state : '- - - -';
+      var v = ok(bu) && !isNaN(bu.state) ? Number(bu.state) : NaN;
+      var pct = isNaN(v) ? null : Math.min(100, Math.max(0, v / BATT_MAX * 100));
+      var volt = ok(bv) && !isNaN(bv.state) ? Number(bv.state).toFixed(1) + ' V' : '--.- V';
+
+      // Activity, top right: only while charging or mowing.
+      var s = (ok(st) ? st.state : '').toLowerCase() + ' ' + mode.toLowerCase();
+      var blade = ok(bl) && !isNaN(bl.state) ? Number(bl.state) : 0;
+      var act = '';
+      if (/charg|ladd/.test(s)) {
+        act = 'LADDAR';
+      } else if (blade > 0 || /mow|cut|klipp/.test(s)) {
+        var t = ok(mw) && !isNaN(mw.state) ? Math.round(Number(mw.state)) : 0;
+        var h = Math.floor(t / 60), mi = t % 60;
+        act = 'KLIPPER ' + (h > 0 ? h + 'h ' + (mi < 10 ? '0' : '') + mi + 'm' : mi + ' min');
+      }
+
+      return '<div style="background:repeating-linear-gradient(0deg,rgba(0,0,0,.055) 0 1px,transparent 1px 3px),'
+        + 'radial-gradient(130% 150% at 50% 0%,#B7C65A 0%,#9FAF48 58%,#8A9A3C 100%);'
+        + 'border:5px solid #14161A;border-radius:5px;box-shadow:inset 0 3px 10px rgba(0,0,0,.4);'
+        + 'padding:11px 13px 12px 13px;font-family:Roboto Mono,SF Mono,Consolas,monospace;color:#151F0B;'
+        + 'text-align:left;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;">'
+        + '<div style="font-size:26px;font-weight:700;letter-spacing:.1em;line-height:1.05;">' + mode + '</div>'
+        + '<div style="font-size:11px;font-weight:700;letter-spacing:.14em;color:#1D2A0E;white-space:nowrap;">'
+        + act + '</div></div>'
+        + '<div style="font-size:13px;letter-spacing:.1em;color:#2C3A16;margin-top:5px;white-space:nowrap;'
+        + 'overflow:hidden;text-overflow:ellipsis;">' + status + '</div>'
+        + '<div style="height:8px;border:1px solid #16200C;background:rgba(0,0,0,.08);margin-top:9px;">'
+        + '<div style="height:100%;width:' + (pct || 0).toFixed(0) + '%;background:#16200C;"></div></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:12px;letter-spacing:.06em;'
+        + 'color:#2B3915;margin-top:6px;"><span>BATTERI ' + (pct === null ? '--%' : pct.toFixed(0) + '%')
+        + '</span><span>' + volt + '</span></div>'
+        + '</div>';
+    ]]]
+styles:
+  card:
+    - background: 'linear-gradient(180deg, #35393C 0%, #242729 100%)'
+    - border: '1px solid #16181A'
+    - border-radius: 20px
+    - padding: 12px 14px 14px 14px
+    - box-shadow: '0 8px 22px rgba(0,0,0,.5)'
+  grid:
+    - grid-template-areas: '"brand more" "lcd lcd"'
+    - grid-template-columns: 1fr auto
+    - row-gap: 10px
+  custom_fields:
+    brand:
+      - justify-self: start
+      - color: '#FF5800'
+      - font-size: 10px
+      - font-weight: 700
+      - letter-spacing: 0.34em
+      - padding-left: 2px
+    more:
+      - justify-self: end
+      - color: '#787E82'
+      - font-size: 10px
+      - letter-spacing: 0.16em
+      - padding-right: 2px
+    lcd:
+      - justify-self: stretch

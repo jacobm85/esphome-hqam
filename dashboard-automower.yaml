@@ -4,7 +4,7 @@
 # =================================================================
 #
 #  REQUIRES (HACS > Frontend):
-#    button-card, stack-in-card, card-mod
+#    button-card, stack-in-card, card-mod, apexcharts-card
 #
 #  CALIBRATION:
 #    Search for BATT_MAX and set it to the value seen right after
@@ -14,7 +14,10 @@
 #    sensor.automower_status, sensor.automower_total_cutting_time,
 #    sensor.automower_battery_charged_capacity, sensor.automower_mower_clock,
 #    switch.automower_bypass_timer, switch.automower_week_timer_*, the
-#    datetime entities for the schedule, button.automower_sync_mower_clock.
+#    time entities for the schedule, button.automower_sync_mower_clock.
+#
+#  YAML NOTE: a colour such as #4A4F54 must be inside quotes. Unquoted,
+#  " #" starts a comment and the rest of the line is silently dropped.
 #
 #  Paste via Dashboard > Edit > Raw configuration editor.
 #  Replace all existing content.
@@ -22,14 +25,15 @@
 
 button_card_templates:
 
+  # ---- Keypad keys ----
   key:
     show_icon: false
     show_state: false
     styles:
       card:
         - height: 46px
-        - background: linear-gradient(180deg, #4A4F54 0%, #3A3E42 100%)
-        - border: 1px solid #1D1F21
+        - background: 'linear-gradient(180deg, #4A4F54 0%, #3A3E42 100%)'
+        - border: '1px solid #1D1F21'
         - border-radius: 7px
         - box-shadow: >
             inset 0 1px 0 rgba(255,255,255,.14),
@@ -69,11 +73,166 @@ button_card_templates:
     tap_action:
       action: none
 
+  # A key with a status lamp. Lit while the entity's state equals
+  # variables.on_state ('on' by default).
+  led_key:
+    template: key_small
+    variables:
+      on_state: 'on'
+    tap_action:
+      action: toggle
+    custom_fields:
+      led: >
+        [[[
+          var on = entity && entity.state === variables.on_state;
+          return '<div style="width:7px;height:7px;border-radius:50%;background:'
+            + (on ? '#FF6A1A' : '#222528') + ';box-shadow:'
+            + (on ? '0 0 7px 1px rgba(255,106,26,.85)' : 'inset 0 1px 1px rgba(0,0,0,.7)')
+            + ';"></div>';
+        ]]]
+    styles:
+      card:
+        - height: 52px
+      grid:
+        - grid-template-areas: '"led" "n"'
+        - grid-template-rows: 16px 20px
+      custom_fields:
+        led:
+          - justify-self: center
+          - align-self: end
+
+  mode_key:
+    template: led_key
+    entity: select.automower_mode_select
+
+  # ---- Panel headings ----
+  panel_title:
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    variables:
+      left: ''
+      right: ''
+    custom_fields:
+      left: '[[[ return variables.left ]]]'
+      right: '[[[ return variables.right ]]]'
+    styles:
+      card:
+        - background: none
+        - border: none
+        - box-shadow: none
+        - padding: 0 4px 12px 4px
+      grid:
+        - grid-template-areas: '"left right"'
+        - grid-template-columns: auto auto
+        - justify-content: space-between
+        - align-items: center
+      custom_fields:
+        left:
+          - color: '#FF5800'
+          - font-size: 11px
+          - font-weight: 700
+          - letter-spacing: 0.34em
+        right:
+          - color: '#787E82'
+          - font-size: 11px
+          - letter-spacing: 0.16em
+
+  row_label:
+    show_icon: false
+    show_state: false
+    tap_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - border: none
+        - box-shadow: none
+        - padding: 14px 4px 6px 4px
+      name:
+        - color: '#8A9094'
+        - font-size: 10px
+        - font-weight: 700
+        - letter-spacing: 0.22em
+        - justify-self: start
+
+  # ---- LCD fields ----
+  lcd:
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    styles:
+      card:
+        - background: >
+            repeating-linear-gradient(0deg, rgba(0,0,0,.055) 0 1px, transparent 1px 3px),
+            radial-gradient(130% 150% at 50% 0%, #B7C65A 0%, #9FAF48 58%, #8A9A3C 100%)
+        - border: '4px solid #14161A'
+        - border-radius: 5px
+        - box-shadow: 'inset 0 2px 8px rgba(0,0,0,.4)'
+        - font-family: '"Roboto Mono", "SF Mono", Consolas, monospace'
+        - color: '#151F0B'
+
+  # One value on an LCD. variables.fmt: num (default), time (HH:MM),
+  # hm (minutes as "5h 07m"), clock (mower clock), text.
+  lcd_cell:
+    template: lcd
+    variables:
+      label: ''
+      unit: ''
+      decimals: 0
+      fmt: num
+    custom_fields:
+      label: '[[[ return variables.label ]]]'
+      value: >
+        [[[
+          var s = entity ? entity.state : undefined;
+          if (s === undefined || s === '' || s === 'unknown' || s === 'unavailable') return '- - -';
+          if (variables.fmt === 'time') return s.slice(0, 5);
+          if (variables.fmt === 'clock') return s.slice(11, 16)
+            + '<span style="font-size:11px;font-weight:400;margin-left:6px;">'
+            + Number(s.slice(8, 10)) + '/' + Number(s.slice(5, 7)) + '</span>';
+          if (variables.fmt === 'hm' && !isNaN(s)) {
+            var t = Math.max(0, Math.round(Number(s)));
+            var h = Math.floor(t / 60), m = t % 60;
+            return h > 0 ? h + 'h ' + (m < 10 ? '0' : '') + m + 'm' : m + ' min';
+          }
+          if (variables.fmt !== 'text' && !isNaN(s)) {
+            return Number(s).toFixed(variables.decimals)
+              + (variables.unit ? '<span style="font-size:11px;font-weight:400;margin-left:4px;">'
+                + variables.unit + '</span>' : '');
+          }
+          return s;
+        ]]]
+    styles:
+      card:
+        - padding: 7px 9px 8px 9px
+      grid:
+        - grid-template-areas: '"label" "value"'
+        - row-gap: 3px
+      custom_fields:
+        label:
+          - justify-self: start
+          - font-size: 9px
+          - letter-spacing: 0.16em
+          - color: '#2B3915'
+          - white-space: nowrap
+        value:
+          - justify-self: start
+          - font-size: 18px
+          - font-weight: 700
+          - letter-spacing: 0.04em
+          - line-height: 1.1
+          - white-space: nowrap
+
 views:
   - title: Automower
     path: automower
     type: sections
-    max_columns: 2
+    max_columns: 3
     sections:
 
       # =============================================================
@@ -100,39 +259,10 @@ views:
 
               # ---- Labelling ----
               - type: custom:button-card
-                show_icon: false
-                show_name: false
-                show_state: false
-                tap_action:
-                  action: none
-                card_mod:
-                  style: |
-                    ha-card {
-                      background: none !important;
-                      border: none !important;
-                      box-shadow: none !important;
-                    }
-                custom_fields:
-                  brand: HUSQVARNA
-                  model: AUTOMOWER 220 AC
-                styles:
-                  card:
-                    - padding: 0 4px 14px 4px
-                  grid:
-                    - grid-template-areas: '"brand model"'
-                    - grid-template-columns: auto auto
-                    - justify-content: space-between
-                    - align-items: center
-                  custom_fields:
-                    brand:
-                      - color: '#FF5800'
-                      - font-size: 11px
-                      - font-weight: 700
-                      - letter-spacing: 0.34em
-                    model:
-                      - color: '#787E82'
-                      - font-size: 11px
-                      - letter-spacing: 0.16em
+                template: panel_title
+                variables:
+                  left: HUSQVARNA
+                  right: AUTOMOWER 220 AC
 
               # ---- LCD ----
               - type: custom:button-card
@@ -214,15 +344,8 @@ views:
                   bar: >
                     [[[
                       var BATT_MAX = 2200;
-                      var cand = ['sensor.automower_kapacitet',
-                                  'sensor.automower_battery_used'];
-                      var val = NaN;
-                      for (var i = 0; i < cand.length; i++) {
-                        var e = states[cand[i]];
-                        if (e && e.state !== undefined && e.state !== '' && !isNaN(e.state)) {
-                          val = Number(e.state); break;
-                        }
-                      }
+                      var e = states['sensor.automower_battery_used'];
+                      var val = (e && e.state !== '' && !isNaN(e.state)) ? Number(e.state) : NaN;
                       var pct = !isNaN(val)
                         ? Math.min(100, Math.max(0, val / BATT_MAX * 100)) : 0;
                       return '<div style="height:9px;border:1px solid #16200C;'
@@ -235,15 +358,8 @@ views:
                   batt: >
                     [[[
                       var BATT_MAX = 2200;
-                      var cand = ['sensor.automower_kapacitet',
-                                  'sensor.automower_battery_used'];
-                      var val = NaN;
-                      for (var i = 0; i < cand.length; i++) {
-                        var e = states[cand[i]];
-                        if (e && e.state !== undefined && e.state !== '' && !isNaN(e.state)) {
-                          val = Number(e.state); break;
-                        }
-                      }
+                      var e = states['sensor.automower_battery_used'];
+                      var val = (e && e.state !== '' && !isNaN(e.state)) ? Number(e.state) : NaN;
                       var v = states['sensor.automower_battery_voltage'];
                       var pct = !isNaN(val)
                         ? Math.min(100, Math.max(0, val / BATT_MAX * 100)).toFixed(0) + '%'
@@ -386,211 +502,410 @@ views:
                     name: "HOME"
                     tap_action: { action: perform-action, perform_action: button.press, target: { entity_id: button.automower_key_home } }
 
-          # ---- Mode selector below the panel ----
-          - type: tile
-            entity: select.automower_mode_select
-            name: Läge
-            icon: mdi:robot-mower
-            features:
-              - type: select-options
+              # ---- Mode ----
+              - type: custom:button-card
+                template: row_label
+                name: LÄGE
+              - type: grid
+                columns: 4
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: mode_key
+                    name: MAN
+                    variables: { on_state: MAN }
+                    tap_action: { action: perform-action, perform_action: select.select_option, target: { entity_id: select.automower_mode_select }, data: { option: MAN } }
+                  - type: custom:button-card
+                    template: mode_key
+                    name: AUTO
+                    variables: { on_state: AUTO }
+                    tap_action: { action: perform-action, perform_action: select.select_option, target: { entity_id: select.automower_mode_select }, data: { option: AUTO } }
+                  - type: custom:button-card
+                    template: mode_key
+                    name: HOME
+                    variables: { on_state: HOME }
+                    tap_action: { action: perform-action, perform_action: select.select_option, target: { entity_id: select.automower_mode_select }, data: { option: HOME } }
+                  - type: custom:button-card
+                    template: mode_key
+                    name: DEMO
+                    variables: { on_state: DEMO }
+                    tap_action: { action: perform-action, perform_action: select.select_option, target: { entity_id: select.automower_mode_select }, data: { option: DEMO } }
 
       # =============================================================
       #  Timer schedule
       # =============================================================
       - type: grid
         cards:
-          - type: heading
-            heading: Timerschema
-            heading_style: title
+          - type: custom:stack-in-card
+            mode: vertical
+            keep:
+              background: true
+              box_shadow: true
+              margin: true
+            card_mod:
+              style: |
+                ha-card {
+                  background: linear-gradient(180deg, #35393C 0%, #242729 100%) !important;
+                  border: 1px solid #16181A;
+                  border-radius: 22px;
+                  padding: 18px 16px 20px 16px;
+                  box-shadow: 0 10px 28px rgba(0,0,0,.5);
+                }
+            cards:
+              - type: custom:button-card
+                template: panel_title
+                variables:
+                  left: TIMER
+                  right: SCHEMA
 
-          - type: tile
-            entity: switch.automower_bypass_timer
-            name: Förbikoppla timer
-            icon: mdi:timer-off-outline
-            features:
-              - type: toggle
+              # Lit = box ticked on the keypad = schedule ignored.
+              - type: custom:button-card
+                template: led_key
+                entity: switch.automower_bypass_timer
+                name: FÖRBIKOPPLA TIMER
 
-          - type: heading
-            heading: Timer 1
-            heading_style: subtitle
+              # Times: tap a field to change it. The Dagtimer and Helgtimer
+              # boxes on the keypad have no register of their own; a box is
+              # unticked when all four of its times are 00:00.
+              - type: grid
+                columns: 2
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: row_label
+                    name: VARDAG · MÅN–TOR
+                  - type: custom:button-card
+                    template: row_label
+                    name: HELG · FRE–SÖN
+              - type: custom:button-card
+                template: row_label
+                name: TIMER 1
+                styles:
+                  card:
+                    - padding: 2px 4px 4px 4px
+              - type: grid
+                columns: 4
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_1_weekday_start
+                    variables: { label: START, fmt: time }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_1_weekday_stop
+                    variables: { label: STOPP, fmt: time }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_1_weekend_start
+                    variables: { label: START, fmt: time }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_1_weekend_stop
+                    variables: { label: STOPP, fmt: time }
+              - type: custom:button-card
+                template: row_label
+                name: TIMER 2
+                styles:
+                  card:
+                    - padding: 8px 4px 4px 4px
+              - type: grid
+                columns: 4
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_2_weekday_start
+                    variables: { label: START, fmt: time }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_2_weekday_stop
+                    variables: { label: STOPP, fmt: time }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_2_weekend_start
+                    variables: { label: START, fmt: time }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: time.automower_timer_2_weekend_stop
+                    variables: { label: STOPP, fmt: time }
 
-          - type: tile
-            entity: time.automower_timer_1_weekday_start
-            name: Vardag start
-            icon: mdi:clock-start
-          - type: tile
-            entity: time.automower_timer_1_weekday_stop
-            name: Vardag stopp
-            icon: mdi:clock-end
-          - type: tile
-            entity: time.automower_timer_1_weekend_start
-            name: Helg start
-            icon: mdi:clock-start
-          - type: tile
-            entity: time.automower_timer_1_weekend_stop
-            name: Helg stopp
-            icon: mdi:clock-end
-
-          - type: heading
-            heading: Timer 2
-            heading_style: subtitle
-
-          - type: tile
-            entity: time.automower_timer_2_weekday_start
-            name: Vardag start
-            icon: mdi:clock-start
-          - type: tile
-            entity: time.automower_timer_2_weekday_stop
-            name: Vardag stopp
-            icon: mdi:clock-end
-          - type: tile
-            entity: time.automower_timer_2_weekend_start
-            name: Helg start
-            icon: mdi:clock-start
-          - type: tile
-            entity: time.automower_timer_2_weekend_stop
-            name: Helg stopp
-            icon: mdi:clock-end
-
-          - type: heading
-            heading: Veckotimer
-            heading_style: subtitle
-
-          - type: tile
-            entity: switch.automower_week_timer_monday
-            name: Mån
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-          - type: tile
-            entity: switch.automower_week_timer_tuesday
-            name: Tis
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-          - type: tile
-            entity: switch.automower_week_timer_wednesday
-            name: Ons
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-          - type: tile
-            entity: switch.automower_week_timer_thursday
-            name: Tor
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-          - type: tile
-            entity: switch.automower_week_timer_friday
-            name: Fre
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-          - type: tile
-            entity: switch.automower_week_timer_saturday
-            name: Lör
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-          - type: tile
-            entity: switch.automower_week_timer_sunday
-            name: Sön
-            icon: mdi:calendar-check
-            features:
-              - type: toggle
-
-          - type: tile
-            entity: button.automower_sync_mower_clock
-            name: Synka klippar-klockan
-            icon: mdi:clock-check-outline
-            tap_action:
-              action: perform-action
-              perform_action: button.press
-              target:
-                entity_id: button.automower_sync_mower_clock
+              # Week days. Veckotimer on the keypad is unticked when all
+              # seven are lit.
+              - type: custom:button-card
+                template: row_label
+                name: VECKOTIMER
+              - type: grid
+                columns: 7
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_monday
+                    name: MÅ
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_tuesday
+                    name: TI
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_wednesday
+                    name: "ON"
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_thursday
+                    name: TO
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_friday
+                    name: FR
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_saturday
+                    name: LÖ
+                  - type: custom:button-card
+                    template: led_key
+                    entity: switch.automower_week_timer_sunday
+                    name: SÖ
 
       # =============================================================
-      #  Measurements
+      #  Measurements and diagnostics
       # =============================================================
       - type: grid
         cards:
-          - type: heading
-            heading: Drift
-          - type: tile
-            entity: sensor.automower_blade_motor_speed
-            name: Knivmotor
-            icon: mdi:fan
-          - type: tile
-            entity: sensor.automower_mowing_time
-            name: Klipptid (pass)
-            icon: mdi:timer-outline
-          - type: tile
-            entity: sensor.automower_total_cutting_time
-            name: Total klipptid
-            icon: mdi:timer-sand
-          - type: tile
-            entity: sensor.automower_charging_time
-            name: Laddtid
-            icon: mdi:battery-charging
-          - type: tile
-            entity: sensor.automower_loop_signal_quality
-            name: Loop-signal
-            icon: mdi:signal-variant
+          - type: custom:stack-in-card
+            mode: vertical
+            keep:
+              background: true
+              box_shadow: true
+              margin: true
+            card_mod:
+              style: |
+                ha-card {
+                  background: linear-gradient(180deg, #35393C 0%, #242729 100%) !important;
+                  border: 1px solid #16181A;
+                  border-radius: 22px;
+                  padding: 18px 16px 20px 16px;
+                  box-shadow: 0 10px 28px rgba(0,0,0,.5);
+                }
+            cards:
+              - type: custom:button-card
+                template: panel_title
+                variables:
+                  left: DRIFT
+                  right: MÄTVÄRDEN
 
-          - type: heading
-            heading: Batteri
-          - type: tile
-            entity: sensor.automower_battery_used
-            name: Kapacitet
-            icon: mdi:battery
-            features:
-              - type: trend-graph
-                hours_to_show: 48
-          - type: tile
-            entity: sensor.automower_battery_capacity
-            name: Total kapacitet
-            icon: mdi:battery-high
-          - type: tile
-            entity: sensor.automower_battery_charged_capacity
-            name: Laddad kapacitet
-            icon: mdi:battery-charging-100
-          - type: tile
-            entity: sensor.automower_battery_current
-            name: Ström
-            icon: mdi:current-dc
-          - type: tile
-            entity: sensor.automower_battery_voltage
-            name: Spänning
-            icon: mdi:flash
-          - type: tile
-            entity: sensor.automower_battery_temperature
-            name: Temperatur
-            icon: mdi:thermometer
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_blade_motor_speed
+                    variables: { label: KNIVMOTOR, unit: rpm }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_mowing_time
+                    variables: { label: KLIPPTID, fmt: hm }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_total_cutting_time
+                    variables: { label: TOTALT, unit: h }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_charging_time
+                    variables: { label: LADDTID, fmt: hm }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_loop_signal_quality
+                    variables: { label: SLINGSIGNAL }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_square_mode_percent
+                    variables: { label: KVADRAT, unit: '%' }
 
-          - type: heading
-            heading: Diagnostik
-          - type: tile
-            entity: sensor.automower_status
-            name: Status
-            icon: mdi:text-short
-          - type: tile
-            entity: sensor.automower_mower_clock
-            name: Klocka
-            icon: mdi:clock-outline
-          - type: tile
-            entity: sensor.automower_firmware_version
-            name: Firmware
-            icon: mdi:chip
-          - type: tile
-            entity: sensor.automower_last_received_code
-            name: Senaste kod
-            icon: mdi:code-braces
-          - type: tile
-            entity: button.automower_restart
-            name: Starta om ESP
-            icon: mdi:restart
-            tap_action:
-              action: perform-action
-              perform_action: button.press
-              target:
-                entity_id: button.automower_restart
+              # ---- Battery ----
+              - type: custom:button-card
+                template: row_label
+                name: BATTERI
+              - type: custom:button-card
+                template: lcd
+                entity: sensor.automower_battery_used
+                custom_fields:
+                  label: KAPACITET
+                  pct: >
+                    [[[
+                      var BATT_MAX = 2200;
+                      var v = entity && !isNaN(entity.state) ? Number(entity.state) : NaN;
+                      return isNaN(v) ? '--%'
+                        : Math.min(100, Math.max(0, v / BATT_MAX * 100)).toFixed(0) + '%';
+                    ]]]
+                  bar: >
+                    [[[
+                      var BATT_MAX = 2200;
+                      var v = entity && !isNaN(entity.state) ? Number(entity.state) : 0;
+                      var pct = Math.min(100, Math.max(0, v / BATT_MAX * 100));
+                      return '<div style="height:9px;border:1px solid #16200C;'
+                        + 'background:rgba(0,0,0,.08);display:flex;">'
+                        + '<div style="height:100%;width:' + pct.toFixed(0)
+                        + '%;background:#16200C;"></div></div>';
+                    ]]]
+                  mah: >
+                    [[[
+                      return entity && !isNaN(entity.state)
+                        ? Math.round(Number(entity.state)) + ' / 2200 mAh' : '';
+                    ]]]
+                styles:
+                  card:
+                    - padding: 9px 11px 10px 11px
+                  grid:
+                    - grid-template-areas: '"label pct" "bar bar" "mah mah"'
+                    - grid-template-columns: 1fr auto
+                    - gap: 5px 8px
+                  custom_fields:
+                    label:
+                      - justify-self: start
+                      - font-size: 9px
+                      - letter-spacing: 0.16em
+                      - color: '#2B3915'
+                    pct:
+                      - font-size: 18px
+                      - font-weight: 700
+                    mah:
+                      - justify-self: start
+                      - font-size: 11px
+                      - color: '#2B3915'
+              - type: grid
+                columns: 3
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_battery_voltage
+                    variables: { label: SPÄNNING, unit: V, decimals: 1 }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_battery_current
+                    variables: { label: STRÖM, unit: mA }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_battery_temperature
+                    variables: { label: TEMP, unit: °C }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_battery_charged_capacity
+                    variables: { label: LADDAT, unit: mAh }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_battery_capacity
+                    variables: { label: TOTAL, unit: mAh }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_battery_capacity_before_return
+                    variables: { label: HEM VID, unit: mAh }
+
+              - type: custom:button-card
+                template: row_label
+                name: SPÄNNING · 48 H
+              - type: custom:apexcharts-card
+                graph_span: 48h
+                header:
+                  show: false
+                apex_config:
+                  chart:
+                    height: 150
+                    background: transparent
+                    foreColor: '#8A9094'
+                  grid:
+                    borderColor: 'rgba(255,255,255,.07)'
+                  legend:
+                    show: false
+                  tooltip:
+                    theme: dark
+                series:
+                  - entity: sensor.automower_battery_voltage
+                    name: Spänning
+                    color: '#FF7A2E'
+                    type: area
+                    opacity: 0.18
+                    stroke_width: 2
+                    group_by:
+                      func: avg
+                      duration: 1h
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: none !important;
+                      border: none !important;
+                      box-shadow: none !important;
+                    }
+
+          - type: custom:stack-in-card
+            mode: vertical
+            keep:
+              background: true
+              box_shadow: true
+              margin: true
+            card_mod:
+              style: |
+                ha-card {
+                  background: linear-gradient(180deg, #35393C 0%, #242729 100%) !important;
+                  border: 1px solid #16181A;
+                  border-radius: 22px;
+                  padding: 18px 16px 20px 16px;
+                  box-shadow: 0 10px 28px rgba(0,0,0,.5);
+                }
+            cards:
+              - type: custom:button-card
+                template: panel_title
+                variables:
+                  left: DIAGNOSTIK
+                  right: ESP32
+
+              - type: grid
+                columns: 2
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_status
+                    variables: { label: STATUS, fmt: text }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_mower_clock
+                    variables: { label: KLIPPARENS KLOCKA, fmt: clock }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_firmware_version
+                    variables: { label: FIRMWARE }
+                  - type: custom:button-card
+                    template: lcd_cell
+                    entity: sensor.automower_esp_temperature
+                    variables: { label: ESP-TEMP, unit: °C }
+              - type: custom:button-card
+                template: lcd_cell
+                entity: sensor.automower_last_received_code
+                variables: { label: SENASTE KOD, fmt: text }
+
+              - type: grid
+                columns: 2
+                square: false
+                cards:
+                  - type: custom:button-card
+                    template: key_small
+                    name: SYNKA KLOCKA
+                    tap_action:
+                      action: perform-action
+                      perform_action: button.press
+                      target:
+                        entity_id: button.automower_sync_mower_clock
+                  - type: custom:button-card
+                    template: key_small
+                    name: STARTA OM ESP
+                    tap_action:
+                      action: perform-action
+                      perform_action: button.press
+                      target:
+                        entity_id: button.automower_restart
+                      confirmation:
+                        text: Starta om ESP:n i klipparen?

@@ -199,7 +199,15 @@ latest changes. It is off after every restart.
 
 [`dashboard-automower.yaml`](dashboard-automower.yaml) is a control panel
 replica, pasted via Dashboard > Edit > Raw configuration editor. Requires
-`button-card`, `stack-in-card` and `card-mod` from HACS.
+`button-card`, `stack-in-card`, `card-mod` and `apexcharts-card` from HACS.
+The schedule, measurements and diagnostics use the same panel and LCD style
+as the display; tap a value to open its history or, for a timer time, to
+change it.
+
+[`cards/`](cards) holds two matching info cards for other dashboards, one
+compact for a phone and one larger for a tablet. Both show mode, status and
+battery, and a tap opens the Automower dashboard. They need only
+`button-card`.
 
 ## Status
 
