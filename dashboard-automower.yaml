@@ -101,6 +101,21 @@ button_card_templates:
           - justify-self: center
           - align-self: end
 
+  # Full-width variant: lamp to the left of the text on one line.
+  led_key_wide:
+    template: led_key
+    styles:
+      grid:
+        - grid-template-areas: '"led n"'
+        - grid-template-columns: auto auto
+        - grid-template-rows: auto
+        - justify-content: center
+        - align-items: center
+        - column-gap: 10px
+      custom_fields:
+        led:
+          - align-self: center
+
   mode_key:
     template: led_key
     entity: select.automower_mode_select
@@ -560,7 +575,7 @@ views:
 
               # Lit = box ticked on the keypad = schedule ignored.
               - type: custom:button-card
-                template: led_key
+                template: led_key_wide
                 entity: switch.automower_bypass_timer
                 name: FÖRBIKOPPLA TIMER
 
